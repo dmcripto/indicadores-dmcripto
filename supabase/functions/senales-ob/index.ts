@@ -81,7 +81,7 @@ Deno.serve(async (req) => {
     if (error) errores["desbloqueos"] = error.message.slice(0, 200); // sin tabla: se sigue sin filtro
     else desbloqueos = data ?? [];
   }
-  const normSym = (x: string) => x.toUpperCase().replace(/.P$|PERP$/, "").replace(/(USDC|USD)$/, "USDT");
+  const normSym = (x: string) => x.toUpperCase().replace(/\.P$|PERP$/, "").replace(/(USDC|USD)$/, "USDT");
 
   // Lotes de 5 para no saturar las APIs públicas
   for (let k = 0; k < lista.length; k += 5) {
