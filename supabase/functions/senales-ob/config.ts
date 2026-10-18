@@ -18,3 +18,6 @@ export const ENVIAR_OSC = false;
 
 /** Puntaje mínimo (0-100) para enviar señales del oscilador. 50 = solo grados A y B; 40 = todas (más ruido). */
 export const MIN_PUNTAJE_OSC = 50;
+
+/** false = se envía solo el TP principal (tarjeta con un único TARGET). true = también TP2 y TP3 (tarjeta con TARGET 1, 2 y 3). */
+export const ENVIAR_TPS_EXTRA = false;

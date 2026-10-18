@@ -5,7 +5,7 @@
 //   ?moneda=BTC   solo esa moneda
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { ENVIAR_OB, ENVIAR_OSC, MIN_PUNTAJE_OSC, MONEDAS, TF_MIN, VENTANA_VELAS } from "./config.ts";
+import { ENVIAR_OB, ENVIAR_OSC, ENVIAR_TPS_EXTRA, MIN_PUNTAJE_OSC, MONEDAS, TF_MIN, VENTANA_VELAS } from "./config.ts";
 import { obtenerVelas } from "./fuentes.ts";
 import { calcular, porTemporalidad, type Senal } from "./motor.ts";
 
@@ -29,8 +29,8 @@ async function procesar(base: string) {
         direction: s.lado,
         entry: redondear(s.entrada),
         tp: redondear(s.target),
-        tp2: redondear(s.tp2),
-        tp3: redondear(s.tp3),
+        tp2: ENVIAR_TPS_EXTRA ? redondear(s.tp2) : undefined,
+        tp3: ENVIAR_TPS_EXTRA ? redondear(s.tp3) : undefined,
         sl: redondear(s.sl),
         fuente: s.fuente,
         tf: String(TF_MIN),
