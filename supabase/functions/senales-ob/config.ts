@@ -40,3 +40,6 @@ export const FILTRO_DESBLOQUEOS: "off" | "cuidadoso" = "cuidadoso";
 export const DESBLOQUEO_DIAS = 7;
 /** Tamaño mínimo del desbloqueo, en % de la oferta circulante (igual que el modo cuidadoso de VELTRIX). */
 export const DESBLOQUEO_MIN_PCT = 5;
+
+/** true = las señales llevan "auto": true y la tarjeta sale como «SEÑAL AUTOMÁTICA · BOT DE VELTRIX» (requiere el parche del webhook). */
+export const MARCAR_COMO_AUTOMATICA = true;
