@@ -1,0 +1,62 @@
+// Descarga de velas cerradas de futuros perpetuos USDT desde APIs públicas (sin clave).
+// Orden de prueba: Bybit -> OKX -> Binance. Si una está bloqueada en la región del servidor, usa la siguiente.
+
+import type { Vela } from "./indicadores.ts";
+
+export interface Resultado {
+  velas: Vela[];
+  fuente: string;
+}
+
+const MIN_BYBIT: Record<number, string> = { 1: "1", 3: "3", 5: "5", 15: "15", 30: "30", 60: "60", 240: "240", 0: "D", [-1]: "W" };
+const MIN_OKX: Record<number, string> = { 1: "1m", 3: "3m", 5: "5m", 15: "15m", 30: "30m", 60: "1H", 240: "4H", 0: "1Dutc", [-1]: "1Wutc" };
+const MIN_BINANCE: Record<number, string> = { 1: "1m", 3: "3m", 5: "5m", 15: "15m", 30: "30m", 60: "1h", 240: "4h", 0: "1d", [-1]: "1w" };
+
+async function getJson(url: string): Promise<any> {
+  const r = await fetch(url, { signal: AbortSignal.timeout(8000), headers: { "User-Agent": "senales-ob/1.0" } });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+/** Quita la vela en formación (la última) y devuelve en orden cronológico. */
+function cerradas(velas: Vela[], periodoMs: number, incluirAbierta: boolean): Vela[] {
+  velas.sort((a, b) => a.t - b.t);
+  const ahora = Date.now();
+  return incluirAbierta ? velas : velas.filter((v) => v.t + periodoMs <= ahora);
+}
+
+export function periodoMs(min: number): number {
+  return (min > 0 ? min : min === 0 ? 1440 : 10080) * 60_000;
+}
+
+/** `base` es la moneda, por ejemplo "BTC" -> BTCUSDT. */
+export async function obtenerVelas(base: string, min: number, incluirAbierta = false): Promise<Resultado> {
+  const errores: string[] = [];
+  const intentos: Array<[string, () => Promise<Vela[]>]> = [
+    ["Bybit", async () => {
+      const j = await getJson(`https://api.bybit.com/v5/market/kline?category=linear&symbol=${base}USDT&interval=${MIN_BYBIT[min]}&limit=1000`);
+      if (j.retCode !== 0 || !j.result?.list?.length) throw new Error(j.retMsg ?? "sin datos");
+      return j.result.list.map((r: string[]) => ({ t: +r[0], o: +r[1], h: +r[2], l: +r[3], c: +r[4], v: +r[5] }));
+    }],
+    ["OKX", async () => {
+      const j = await getJson(`https://www.okx.com/api/v5/market/candles?instId=${base}-USDT-SWAP&bar=${MIN_OKX[min]}&limit=300`);
+      if (j.code !== "0" || !j.data?.length) throw new Error(j.msg ?? "sin datos");
+      return j.data.map((r: string[]) => ({ t: +r[0], o: +r[1], h: +r[2], l: +r[3], c: +r[4], v: +r[5] }));
+    }],
+    ["Binance", async () => {
+      const j = await getJson(`https://fapi.binance.com/fapi/v1/klines?symbol=${base}USDT&interval=${MIN_BINANCE[min]}&limit=1000`);
+      if (!Array.isArray(j) || !j.length) throw new Error("sin datos");
+      return j.map((r: string[]) => ({ t: +r[0], o: +r[1], h: +r[2], l: +r[3], c: +r[4], v: +r[5] }));
+    }],
+  ];
+  for (const [nombre, fn] of intentos) {
+    try {
+      const velas = cerradas(await fn(), periodoMs(min), incluirAbierta);
+      if (velas.length >= 200) return { velas, fuente: nombre };
+      errores.push(`${nombre}: pocas velas (${velas.length})`);
+    } catch (e) {
+      errores.push(`${nombre}: ${(e as Error).message}`);
+    }
+  }
+  throw new Error(errores.join(" | "));
+}
