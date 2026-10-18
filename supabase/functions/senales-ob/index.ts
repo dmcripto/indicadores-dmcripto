@@ -25,7 +25,7 @@ async function procesar(base: string) {
       clave: `${s.fuente}|${base}|${TF_MIN}|${s.lado}|${s.t}`,
       // Nombres que entiende tradingview-webhook de VELTRIX: symbol, direction, entry, tp, tp2, tp3, sl
       payload: {
-        symbol: `${base}USDT.P`,
+        symbol: `${base}USDT`,
         direction: s.lado,
         entry: redondear(s.entrada),
         tp: redondear(s.target),
