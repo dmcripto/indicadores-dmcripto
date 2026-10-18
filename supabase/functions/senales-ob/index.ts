@@ -5,8 +5,8 @@
 //   ?moneda=BTC   solo esa moneda
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { ENVIAR_OB, ENVIAR_OSC, ENVIAR_TPS_EXTRA, MIN_PUNTAJE_OSC, MONEDAS, TF_MIN, VENTANA_VELAS } from "./config.ts";
-import { obtenerVelas } from "./fuentes.ts";
+import { ENVIAR_OB, ENVIAR_OSC, ENVIAR_TPS_EXTRA, INCLUIR_MIS_MONEDAS, MIN_PUNTAJE_OSC, MONEDAS, TF_MIN, TOP_VOLUMEN, VENTANA_VELAS } from "./config.ts";
+import { obtenerTop, obtenerVelas } from "./fuentes.ts";
 import { calcular, porTemporalidad, type Senal } from "./motor.ts";
 
 const redondear = (x?: number) => (x === undefined || Number.isNaN(x) ? undefined : Number(x.toPrecision(7)));
@@ -55,9 +55,18 @@ Deno.serve(async (req) => {
   if (!dry && !webhook) return Response.json({ error: "Falta el secreto SIGNAL_WEBHOOK_URL" }, { status: 500 });
 
   const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-  const lista = unica ? [unica] : MONEDAS;
-  const resumen: Record<string, unknown>[] = [];
   const errores: Record<string, string> = {};
+  const topN = Number(url.searchParams.get("top") ?? TOP_VOLUMEN);
+  let lista = unica ? [unica] : [...MONEDAS];
+  if (!unica && topN > 0) {
+    try {
+      const top = await obtenerTop(topN);
+      lista = INCLUIR_MIS_MONEDAS ? [...new Set([...top.monedas, ...MONEDAS])] : top.monedas;
+    } catch (e) {
+      errores["top"] = String((e as Error).message).slice(0, 300); // si falla, se usan solo tus monedas
+    }
+  }
+  const resumen: Record<string, unknown>[] = [];
 
   // Lotes de 5 para no saturar las APIs públicas
   for (let k = 0; k < lista.length; k += 5) {
@@ -92,5 +101,5 @@ Deno.serve(async (req) => {
       }
     }
   }
-  return Response.json({ ok: Object.keys(errores).length === 0, monedas: lista.length, resumen, errores });
+  return Response.json({ ok: !Object.keys(errores).some((k) => k.endsWith(":envio")), monedas: lista.length, resumen, errores });
 });

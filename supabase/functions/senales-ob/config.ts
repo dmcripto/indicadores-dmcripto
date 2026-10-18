@@ -21,3 +21,12 @@ export const MIN_PUNTAJE_OSC = 50;
 
 /** false = se envía solo el TP principal (tarjeta con un único TARGET). true = también TP2 y TP3 (tarjeta con TARGET 1, 2 y 3). */
 export const ENVIAR_TPS_EXTRA = false;
+
+/**
+ * Además de tus monedas, vigila las N de mayor volumen del mercado (24 h) de futuros USDT.
+ * 0 = desactivado, 20 = Top 20, 40 = Top 40. También se puede forzar con ?top=20 en la URL.
+ */
+export const TOP_VOLUMEN = 40;
+
+/** true = la lista final es TOP_VOLUMEN + MONEDAS (sin repetidas). false = solo el Top por volumen. */
+export const INCLUIR_MIS_MONEDAS = true;
