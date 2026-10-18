@@ -197,6 +197,9 @@ showEMA200 = input.bool(true, "Mostrar EMA 200", group=grpEMA)
 ema200Len  = input.int(200, "Longitud EMA 200", minval=1, group=grpEMA)
 ema200Color = input.color(color.orange, "Color EMA 200", group=grpEMA)
 
+grpBridge = "📨 Puente de señales"
+sendBridge = input.bool(true, "Enviar señales LONG/SHORT con datos (entrada, TP, SL, R:R) por alert()", group=grpBridge, tooltip="Crea la alerta con condición 'Cualquier llamada a alert()' en este indicador. El mensaje es un JSON listo para el puente por correo / webhook.")
+
 // ------------------- CÁLCULOS BASE -------------------
 atr = ta.atr(atrLen)
 vMA = ta.sma(volume, whaleLen)
@@ -1328,6 +1331,9 @@ if bullSig or bearSig
         lbSig := label.new(bar_index, low, ctxMark ? (ctxBias == "LONG" ? "LONG ✅" : "LONG ⚠️") : "LONG", style=label.style_label_up, color=color.green, textcolor=color.white, size=mobileMode ? size.tiny : lblSize)
     else
         lbSig := label.new(bar_index, high, ctxMark ? (ctxBias == "SHORT" ? "SHORT ✅" : "SHORT ⚠️") : "SHORT", style=label.style_label_down, color=color.red, textcolor=color.white, size=mobileMode ? size.tiny : lblSize)
+
+if sendBridge and (bullSig or bearSig)
+    alert('{"fuente":"OB","lado":"' + (bullSig ? "LONG" : "SHORT") + '","simbolo":"' + syminfo.ticker + '","tf":"' + timeframe.period + '","entrada":' + str.tostring(tEntry, format.mintick) + ',"target":' + str.tostring(tTP, format.mintick) + ',"tp2":' + str.tostring(tTP2, format.mintick) + ',"tp3":' + str.tostring(tTP3, format.mintick) + ',"sl":' + str.tostring(tSL, format.mintick) + ',"rr":' + str.tostring(rr, "#.##") + '}', alert.freq_once_per_bar_close)
 
 if bullSig or bearSig
     if not na(lbE)

@@ -80,6 +80,10 @@ oscPanelSize = input.string("Pequeño", "Tamaño del mini-panel", options=["Pequ
 semVigencia  = input.int(10, "Vigencia del semáforo (velas)", minval=3, maxval=30, group=grpPanel, tooltip="Cuántas velas sigue válido un giro de momentum antes de que el semáforo vuelva a ESPERA.")
 showScoreRows = input.bool(true, "Mostrar puntaje, divergencia y timeframe mayor en el mini-panel", group=grpPanel)
 
+// ------------------- PUENTE DE SEÑALES -------------------
+grpBridge = "📨 Puente de señales"
+sendBridge = input.bool(true, "Enviar señales LONG/SHORT con datos por alert()", group=grpBridge, tooltip="Crea la alerta con condición 'Cualquier llamada a alert()' en este indicador. El mensaje es un JSON listo para el puente por correo / webhook.")
+
 // ------------------- CÁLCULOS -------------------
 f_osc() => (ta.rsi(close, rsiLen) + ta.sma(ta.stoch(close, high, low, stochLen), stochSmooth)) / 2
 osc = f_osc()
@@ -386,6 +390,9 @@ if not mobileMode and bullSig
     label.new(bar_index, 8, f_grade(scoreL) + " " + str.tostring(scoreL), style=label.style_label_up, color=color.new(color.green, 30), textcolor=color.white, size=size.tiny)
 if not mobileMode and bearSig
     label.new(bar_index, 92, f_grade(scoreS) + " " + str.tostring(scoreS), style=label.style_label_down, color=color.new(color.red, 30), textcolor=color.white, size=size.tiny)
+
+if sendBridge and (bullSig or bearSig)
+    alert('{"fuente":"OSC","lado":"' + (bullSig ? "LONG" : "SHORT") + '","simbolo":"' + syminfo.ticker + '","tf":"' + timeframe.period + '","entrada":' + str.tostring(close, format.mintick) + ',"puntaje":' + str.tostring(bullSig ? scoreL : scoreS) + ',"grado":"' + f_grade(bullSig ? scoreL : scoreS) + '"}', alert.freq_once_per_bar_close)
 
 // Series disponibles en la ventana de datos y como fuente en otros indicadores
 plot(bullSig ? 1 : bearSig ? -1 : 0, "Señal (+1 LONG / -1 SHORT)", display=display.data_window)
