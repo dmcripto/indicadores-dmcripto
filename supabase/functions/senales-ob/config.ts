@@ -30,3 +30,13 @@ export const TOP_VOLUMEN = 40;
 
 /** true = la lista final es TOP_VOLUMEN + MONEDAS (sin repetidas). false = solo el Top por volumen. */
 export const INCLUIR_MIS_MONEDAS = true;
+
+/**
+ * Filtro de desbloqueos de tokens (usa la tabla token_unlocks que ya llena tu app con datos de Tokenomist).
+ * "cuidadoso" = no enviar COMPRAS (LONG) de un activo con un desbloqueo grande próximo. "off" = sin filtro.
+ */
+export const FILTRO_DESBLOQUEOS: "off" | "cuidadoso" = "cuidadoso";
+/** Cuántos días antes del desbloqueo se aplica el filtro (igual que el modo cuidadoso de VELTRIX). */
+export const DESBLOQUEO_DIAS = 7;
+/** Tamaño mínimo del desbloqueo, en % de la oferta circulante (igual que el modo cuidadoso de VELTRIX). */
+export const DESBLOQUEO_MIN_PCT = 5;

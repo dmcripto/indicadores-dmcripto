@@ -5,7 +5,7 @@
 //   ?moneda=BTC   solo esa moneda
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { ENVIAR_OB, ENVIAR_OSC, ENVIAR_TPS_EXTRA, INCLUIR_MIS_MONEDAS, MIN_PUNTAJE_OSC, MONEDAS, TF_MIN, TOP_VOLUMEN, VENTANA_VELAS } from "./config.ts";
+import { DESBLOQUEO_DIAS, DESBLOQUEO_MIN_PCT, ENVIAR_OB, ENVIAR_OSC, ENVIAR_TPS_EXTRA, FILTRO_DESBLOQUEOS, INCLUIR_MIS_MONEDAS, MIN_PUNTAJE_OSC, MONEDAS, TF_MIN, TOP_VOLUMEN, VENTANA_VELAS } from "./config.ts";
 import { obtenerTop, obtenerVelas } from "./fuentes.ts";
 import { calcular, porTemporalidad, type Senal } from "./motor.ts";
 
@@ -67,6 +67,21 @@ Deno.serve(async (req) => {
     }
   }
   const resumen: Record<string, unknown>[] = [];
+  const omitidas: string[] = [];
+
+  // Desbloqueos grandes próximos (misma tabla y regla que el modo cuidadoso de VELTRIX)
+  let desbloqueos: Array<{ symbol: string; at: string; pct: number }> = [];
+  if (FILTRO_DESBLOQUEOS !== "off") {
+    const { data, error } = await db
+      .from("token_unlocks")
+      .select("symbol,at,pct")
+      .gt("at", new Date().toISOString())
+      .lte("at", new Date(Date.now() + DESBLOQUEO_DIAS * 86_400_000).toISOString())
+      .gte("pct", DESBLOQUEO_MIN_PCT);
+    if (error) errores["desbloqueos"] = error.message.slice(0, 200); // sin tabla: se sigue sin filtro
+    else desbloqueos = data ?? [];
+  }
+  const normSym = (x: string) => x.toUpperCase().replace(/.P$|PERP$/, "").replace(/(USDC|USD)$/, "USDT");
 
   // Lotes de 5 para no saturar las APIs públicas
   for (let k = 0; k < lista.length; k += 5) {
@@ -78,7 +93,16 @@ Deno.serve(async (req) => {
         errores[lote[j]] = String(r.reason?.message ?? r.reason).slice(0, 300);
         continue;
       }
-      const { base, senales, datos, estado } = r.value;
+      const { base } = r.value;
+      const { datos, estado } = r.value;
+      const prox = desbloqueos.find((e) => normSym(e.symbol) === `${base}USDT`);
+      const senales = r.value.senales.filter((x) => {
+        if (prox && x.payload.direction === "LONG") {
+          omitidas.push(`${base} LONG omitida: desbloqueo ${prox.pct}% el ${prox.at.slice(0, 10)}`);
+          return false;
+        }
+        return true;
+      });
       if (dry) {
         resumen.push({ base, datos, estado, enviaria: senales.map((s) => s.payload) });
         continue;
@@ -101,5 +125,5 @@ Deno.serve(async (req) => {
       }
     }
   }
-  return Response.json({ ok: !Object.keys(errores).some((k) => k.endsWith(":envio")), monedas: lista.length, resumen, errores });
+  return Response.json({ ok: !Object.keys(errores).some((k) => k.endsWith(":envio")), monedas: lista.length, desbloqueos: desbloqueos.length, omitidas, resumen, errores });
 });
