@@ -13,7 +13,8 @@ export const VENTANA_VELAS = 3;
 
 /** Qué señales enviar. */
 export const ENVIAR_OB = true;
-export const ENVIAR_OSC = true;
+// El webhook de la app exige entrada, TP y SL; el oscilador solo da dirección y puntaje, por eso va apagado.
+export const ENVIAR_OSC = false;
 
 /** Puntaje mínimo (0-100) para enviar señales del oscilador. 50 = solo grados A y B; 40 = todas (más ruido). */
 export const MIN_PUNTAJE_OSC = 50;

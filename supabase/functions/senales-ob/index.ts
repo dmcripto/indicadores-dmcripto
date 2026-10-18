@@ -23,16 +23,17 @@ async function procesar(base: string) {
     datos: ltf.fuente,
     senales: nuevas.map((s: Senal) => ({
       clave: `${s.fuente}|${base}|${TF_MIN}|${s.lado}|${s.t}`,
+      // Nombres que entiende tradingview-webhook de VELTRIX: symbol, direction, entry, tp, tp2, tp3, sl
       payload: {
-        fuente: s.fuente,
-        lado: s.lado,
-        simbolo: `${base}USDT.P`,
-        tf: String(TF_MIN),
-        entrada: redondear(s.entrada),
-        target: redondear(s.target),
+        symbol: `${base}USDT.P`,
+        direction: s.lado,
+        entry: redondear(s.entrada),
+        tp: redondear(s.target),
         tp2: redondear(s.tp2),
         tp3: redondear(s.tp3),
         sl: redondear(s.sl),
+        fuente: s.fuente,
+        tf: String(TF_MIN),
         rr: s.rr,
         puntaje: s.puntaje,
         grado: s.grado,

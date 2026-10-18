@@ -13,9 +13,18 @@ const MIN_OKX: Record<number, string> = { 1: "1m", 3: "3m", 5: "5m", 15: "15m", 
 const MIN_BINANCE: Record<number, string> = { 1: "1m", 3: "3m", 5: "5m", 15: "15m", 30: "30m", 60: "1h", 240: "4h", 0: "1d", [-1]: "1w" };
 
 async function getJson(url: string): Promise<any> {
-  const r = await fetch(url, { signal: AbortSignal.timeout(8000), headers: { "User-Agent": "senales-ob/1.0" } });
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  return r.json();
+  let ultimo = "";
+  for (let intento = 0; intento < 2; intento++) {
+    try {
+      const r = await fetch(url, { signal: AbortSignal.timeout(8000), headers: { "User-Agent": "senales-ob/1.0" } });
+      if (r.ok) return await r.json();
+      ultimo = `HTTP ${r.status}`;
+    } catch (e) {
+      ultimo = (e as Error).message;
+    }
+    await new Promise((ok) => setTimeout(ok, 600)); // reintento único ante fallos pasajeros
+  }
+  throw new Error(ultimo);
 }
 
 /** Quita la vela en formación (la última) y devuelve en orden cronológico. */
