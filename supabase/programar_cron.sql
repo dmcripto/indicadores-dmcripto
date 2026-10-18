@@ -1,6 +1,6 @@
 -- Ejecuta esto UNA vez en el SQL Editor de Supabase, después de desplegar la función.
 -- La referencia de tu proyecto (hbkveqilauhqahwuuasc) ya está puesta.
--- Reemplaza solo TU_ANON_KEY (Project Settings -> API -> anon public). No pegues la service_role aquí.
+-- Reemplaza TU_CODIGO por el valor del secreto CRON_TOKEN (supabase secrets set CRON_TOKEN=...).
 
 create extension if not exists pg_cron;
 create extension if not exists pg_net;
@@ -11,8 +11,8 @@ select cron.schedule(
   '1-56/5 * * * *',
   $$
   select net.http_post(
-    url := 'https://hbkveqilauhqahwuuasc.supabase.co/functions/v1/senales-ob',
-    headers := jsonb_build_object('Authorization', 'Bearer TU_ANON_KEY', 'Content-Type', 'application/json'),
+    url := 'https://hbkveqilauhqahwuuasc.supabase.co/functions/v1/senales-ob?k=TU_CODIGO',
+    headers := jsonb_build_object('Content-Type', 'application/json'),
     body := '{}'::jsonb,
     timeout_milliseconds := 120000
   );

@@ -45,6 +45,9 @@ async function procesar(base: string) {
 
 Deno.serve(async (req) => {
   const url = new URL(req.url);
+  // Acceso: código secreto en ?k=... (la función se despliega sin verificación JWT)
+  const token = Deno.env.get("CRON_TOKEN");
+  if (!token || url.searchParams.get("k") !== token) return Response.json({ error: "no autorizado" }, { status: 401 });
   const dry = url.searchParams.get("dry") === "1";
   const unica = url.searchParams.get("moneda")?.toUpperCase();
   const webhook = Deno.env.get("SIGNAL_WEBHOOK_URL");
