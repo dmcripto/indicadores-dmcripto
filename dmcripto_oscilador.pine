@@ -158,11 +158,11 @@ if showExhaustion and szAgot != "Oculto" and (exhBull or exhBear)
         label.delete(lastExhLbl)
         lastExhLbl := na
     if exhBull
-        lbl = label.new(bar_index, osc - 4, "🔄 Agotamiento ▲", style=label.style_label_up, textcolor=color.black, color=color.lime, size=f_sz(szAgot), tooltip="Agotamiento de la caída: el oscilador estuvo mucho tiempo en sobreventa y sale. Posible rebote al alza.")
+        lbl = label.new(bar_index, osc - 9, "🔄 Agotamiento ▲", style=label.style_label_up, textcolor=color.black, color=color.lime, size=f_sz(szAgot), tooltip="Agotamiento de la caída: el oscilador estuvo mucho tiempo en sobreventa y sale. Posible rebote al alza.")
         if showOnlyLastExh
             lastExhLbl := lbl
     if exhBear
-        lbl = label.new(bar_index, osc + 4, "🔄 Agotamiento ▼", style=label.style_label_down, textcolor=color.white, color=color.fuchsia, size=f_sz(szAgot), tooltip="Agotamiento de la subida: el oscilador estuvo mucho tiempo en sobrecompra y sale. Posible caída.")
+        lbl = label.new(bar_index, osc + 9, "🔄 Agotamiento ▼", style=label.style_label_down, textcolor=color.white, color=color.fuchsia, size=f_sz(szAgot), tooltip="Agotamiento de la subida: el oscilador estuvo mucho tiempo en sobrecompra y sale. Posible caída.")
         if showOnlyLastExh
             lastExhLbl := lbl
 
@@ -179,7 +179,7 @@ var label adxLb = na
 if showADX and szAdx != "Oculto" and barstate.islast
     if not na(adxLb)
         label.delete(adxLb)
-    adxLb := label.new(bar_index, adx, (adxWeak ? "Débil" : adx < adxStrongLvl ? "Media" : "Fuerte") + " (" + str.tostring(adx, "#") + ")", style=label.style_label_left, color=adxCol, textcolor=color.white, size=f_sz(szAdx), tooltip="ADX = fuerza de la tendencia. Débil: sin tendencia clara (cuidado con falsas señales). Media: tendencia en formación. Fuerte: tendencia marcada.")
+    adxLb := label.new(bar_index + 3, adx, (adxWeak ? "Débil" : adx < adxStrongLvl ? "Media" : "Fuerte") + " (" + str.tostring(adx, "#") + ")", style=label.style_label_left, color=adxCol, textcolor=color.white, size=f_sz(szAdx), tooltip="ADX = fuerza de la tendencia. Débil: sin tendencia clara (cuidado con falsas señales). Media: tendencia en formación. Fuerte: tendencia marcada.")
 
 // ------------------- SUAVIZADO -------------------
 ma = maTypeInput == "Ninguno" ? na : maTypeInput == "EMA" ? ta.ema(osc, maLen) : maTypeInput == "SMMA (RMA)" ? ta.rma(osc, maLen) : maTypeInput == "WMA" ? ta.wma(osc, maLen) : ta.sma(osc, maLen)

@@ -2023,8 +2023,8 @@ if barstate.islast and showPDZ and not na(rgHi) and rgHi > rgLo
         box.delete(dzBox)
     float pdZ = (rgHi - rgLo) * pdZonePct / 100
     int pdR = bar_index + pdReach
-    pzBox := box.new(rgStart, rgHi, pdR, rgHi - pdZ, border_color=color.new(color.red, 55), bgcolor=color.new(color.red, 88), text="Premium (caro)", text_color=color.new(color.white, 5), text_size=size.small, text_halign=text.align_right, text_valign=text.align_bottom)
-    dzBox := box.new(rgStart, rgLo + pdZ, pdR, rgLo, border_color=color.new(color.green, 55), bgcolor=color.new(color.green, 88), text="Discount (barato)", text_color=color.new(color.white, 5), text_size=size.small, text_halign=text.align_right, text_valign=text.align_top)
+    pzBox := box.new(rgStart, rgHi, pdR, rgHi - pdZ, border_color=color.new(color.red, 55), bgcolor=color.new(color.red, 88), text="Premium (caro)", text_color=color.new(color.white, 5), text_size=size.small, text_halign=text.align_center, text_valign=text.align_bottom)
+    dzBox := box.new(rgStart, rgLo + pdZ, pdR, rgLo, border_color=color.new(color.green, 55), bgcolor=color.new(color.green, 88), text="Discount (barato)", text_color=color.new(color.white, 5), text_size=size.small, text_halign=text.align_center, text_valign=text.align_top)
 
 var array<box> vpBoxes = array.new<box>()
 var array<line> vpLines = array.new<line>()
