@@ -40,6 +40,7 @@ tidyRight   = input.bool(true, "Ordenar etiquetas de la derecha para que no se e
 colLevels   = input.int(1, "Columna de niveles y liquidaciones (velas a la derecha)", minval=1, maxval=60, group=grpTidy)
 colCards    = input.int(20, "Posición de las tarjetas (velas a la derecha de la última)", minval=2, maxval=80, group=grpTidy, tooltip="Si las tarjetas se salen de la pantalla, bájalo o mueve el gráfico hacia la izquierda. Si se pisan con las etiquetas de niveles, súbelo.")
 cardW       = input.int(12, "Largo de la zona detrás de la tarjeta (velas)", minval=10, maxval=80, group=grpTidy, tooltip="Cuánto se prolonga la caja de la zona a la derecha para que la tarjeta quede dentro de ella.")
+pdReach     = input.int(14, "Largo de Premium / Discount / Equilibrio hacia la derecha (velas)", minval=2, maxval=60, group=grpTidy, tooltip="Hasta dónde llegan las franjas a la derecha de la última vela. Si pasan por debajo del panel y tapan su texto, bájalo.")
 showEqBox   = input.bool(true, "Caja Equilibrio (50% del rango, entre barato y caro)", group=grpTidy, tooltip="Franja gris en el punto medio del último rango: por encima el precio está caro (premium), por debajo barato (descuento).")
 rowGapATR   = input.float(0.4, "Alto de cada línea de texto (x ATR) para separar etiquetas", minval=0.1, maxval=1.0, step=0.05, group=grpTidy, tooltip="Si ves etiquetas pegadas o encimadas, súbelo (0.4, 0.5). Si quedan muy separadas, bájalo.")
 grpVP = "📊 Perfil de volumen (zona con más negociación)"
@@ -2009,7 +2010,7 @@ if barstate.islast and showEqBox and not na(rgHi) and rgHi > rgLo
         box.delete(eqBox)
     float rgEq = (rgHi + rgLo) / 2
     float eqBand = math.max((rgHi - rgLo) * 0.03, atr * 0.15)
-    eqBox := box.new(rgStart, rgEq + eqBand, bar_index + colCards + cardW, rgEq - eqBand, border_color=color.new(color.gray, 55), bgcolor=color.new(color.gray, 82), text="Equilibrio", text_color=color.new(color.white, 25), text_size=size.small, text_halign=text.align_right, text_valign=text.align_center)
+    eqBox := box.new(rgStart, rgEq + eqBand, bar_index + pdReach, rgEq - eqBand, border_color=color.new(color.gray, 55), bgcolor=color.new(color.gray, 82), text="Equilibrio", text_color=color.new(color.white, 25), text_size=size.small, text_halign=text.align_right, text_valign=text.align_center)
 
 var box pzBox = na
 var box dzBox = na
@@ -2019,7 +2020,7 @@ if barstate.islast and showPDZ and not na(rgHi) and rgHi > rgLo
     if not na(dzBox)
         box.delete(dzBox)
     float pdZ = (rgHi - rgLo) * pdZonePct / 100
-    int pdR = bar_index + colCards + cardW
+    int pdR = bar_index + pdReach
     pzBox := box.new(rgStart, rgHi, pdR, rgHi - pdZ, border_color=color.new(color.red, 55), bgcolor=color.new(color.red, 88), text="Premium (caro)", text_color=color.new(color.white, 5), text_size=size.small, text_halign=text.align_right, text_valign=text.align_bottom)
     dzBox := box.new(rgStart, rgLo + pdZ, pdR, rgLo, border_color=color.new(color.green, 55), bgcolor=color.new(color.green, 88), text="Discount (barato)", text_color=color.new(color.white, 5), text_size=size.small, text_halign=text.align_right, text_valign=text.align_top)
 
