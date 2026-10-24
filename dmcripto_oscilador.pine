@@ -82,6 +82,17 @@ oscPanelSize = input.string("Pequeño", "Tamaño del mini-panel", options=["Pequ
 semVigencia  = input.int(10, "Vigencia del semáforo (velas)", minval=3, maxval=30, group=grpPanel, tooltip="Cuántas velas sigue válido un giro de momentum antes de que el semáforo vuelva a ESPERA.")
 showScoreRows = input.bool(true, "Mostrar puntaje, divergencia y timeframe mayor en el mini-panel", group=grpPanel)
 compactPanel  = input.bool(true, "Mini-panel compacto (6 filas en vez de 8)", group=grpPanel, tooltip="Junta momentum con zona y divergencia con timeframe mayor para que el panel quepa en paneles bajos. Desactívalo para ver las 8 filas separadas.")
+showOscAssist = input.bool(true, "🤖 Asistente: mensaje simple de 'qué hacer ahora' en el mini-panel", group=grpPanel, tooltip="Última fila del mini-panel. Resume el momentum en palabras simples y te dice qué buscar en el Order Block. No es una recomendación de inversión.")
+
+grpLbl = "🔠 Tamaño de etiquetas por tipo"
+szSig  = input.string("Normal", "Señales LONG / SHORT", options=["Oculto", "Muy pequeño", "Pequeño", "Normal", "Grande"], group=grpLbl, tooltip="Elige el tamaño de cada tipo de etiqueta, o 'Oculto' para quitarla. Si dos etiquetas se pisan, baja el tamaño de una.")
+szAgot = input.string("Pequeño", "Agotamiento (🔄)", options=["Oculto", "Muy pequeño", "Pequeño", "Normal", "Grande"], group=grpLbl)
+szRot  = input.string("Pequeño", "Rotura de directriz (⬇ Rompió soporte / ⬆ Rompió resistencia)", options=["Oculto", "Muy pequeño", "Pequeño", "Normal", "Grande"], group=grpLbl)
+szTL   = input.string("Pequeño", "Nombre de la directriz (↗ Soporte / ↘ Resistencia)", options=["Oculto", "Muy pequeño", "Pequeño", "Normal", "Grande"], group=grpLbl)
+szDiv  = input.string("Pequeño", "Divergencias (Div ↑ / Div ↓)", options=["Oculto", "Muy pequeño", "Pequeño", "Normal", "Grande"], group=grpLbl)
+szAdx  = input.string("Pequeño", "Fuerza de tendencia ADX (Débil / Media / Fuerte)", options=["Oculto", "Muy pequeño", "Pequeño", "Normal", "Grande"], group=grpLbl)
+
+f_sz(string s) => s == "Muy pequeño" ? size.tiny : s == "Pequeño" ? size.small : s == "Normal" ? size.normal : size.large
 
 grpBridge = "📨 Puente de señales"
 sendBridge = input.bool(true, "Enviar señales LONG/SHORT con datos por alert()", group=grpBridge, tooltip="Crea la alerta con condición 'Cualquier llamada a alert()' en este indicador. El mensaje es un JSON listo para el puente por correo / webhook.")
@@ -142,16 +153,16 @@ exhBull = bOS[1] >= minBarsExtreme and osc > osLevel and osc[1] <= osLevel
 exhBear = bOB[1] >= minBarsExtreme and osc < obLevel and osc[1] >= obLevel
 
 var label lastExhLbl = na
-if showExhaustion and (exhBull or exhBear)
+if showExhaustion and szAgot != "Oculto" and (exhBull or exhBear)
     if showOnlyLastExh and not na(lastExhLbl)
         label.delete(lastExhLbl)
         lastExhLbl := na
     if exhBull
-        lbl = label.new(bar_index, osc - 4, "Agot.", style=label.style_label_up, textcolor=color.white, color=color.lime, size=size.tiny)
+        lbl = label.new(bar_index, osc - 4, "🔄 Agotamiento ▲", style=label.style_label_up, textcolor=color.black, color=color.lime, size=f_sz(szAgot), tooltip="Agotamiento de la caída: el oscilador estuvo mucho tiempo en sobreventa y sale. Posible rebote al alza.")
         if showOnlyLastExh
             lastExhLbl := lbl
     if exhBear
-        lbl = label.new(bar_index, osc + 4, "Agot.", style=label.style_label_down, textcolor=color.white, color=color.fuchsia, size=size.tiny)
+        lbl = label.new(bar_index, osc + 4, "🔄 Agotamiento ▼", style=label.style_label_down, textcolor=color.white, color=color.fuchsia, size=f_sz(szAgot), tooltip="Agotamiento de la subida: el oscilador estuvo mucho tiempo en sobrecompra y sale. Posible caída.")
         if showOnlyLastExh
             lastExhLbl := lbl
 
@@ -165,10 +176,10 @@ plot(showADX and showDI ? dP : na, "DI+", color.teal, 1)
 plot(showADX and showDI ? dM : na, "DI-", color.red, 1)
 
 var label adxLb = na
-if showADX and barstate.islast
+if showADX and szAdx != "Oculto" and barstate.islast
     if not na(adxLb)
         label.delete(adxLb)
-    adxLb := label.new(bar_index, adx, (adxWeak ? "Débil" : adx < adxStrongLvl ? "Media" : "Fuerte") + " (" + str.tostring(adx, "#") + ")", style=label.style_label_left, color=adxCol, textcolor=color.white, size=size.small)
+    adxLb := label.new(bar_index, adx, (adxWeak ? "Débil" : adx < adxStrongLvl ? "Media" : "Fuerte") + " (" + str.tostring(adx, "#") + ")", style=label.style_label_left, color=adxCol, textcolor=color.white, size=f_sz(szAdx), tooltip="ADX = fuerza de la tendencia. Débil: sin tendencia clara (cuidado con falsas señales). Media: tendencia en formación. Fuerte: tendencia marcada.")
 
 // ------------------- SUAVIZADO -------------------
 ma = maTypeInput == "Ninguno" ? na : maTypeInput == "EMA" ? ta.ema(osc, maLen) : maTypeInput == "SMMA (RMA)" ? ta.rma(osc, maLen) : maTypeInput == "WMA" ? ta.wma(osc, maLen) : ta.sma(osc, maLen)
@@ -245,19 +256,19 @@ breakResNow = showTL and showTLBreak and resExists and not resBroken and aboveRe
 var label lastBreakLbl = na
 if breakSupNow
     supBroken := true
-    if not mobileMode
+    if not mobileMode and szRot != "Oculto"
         if showOnlyLastBreak and not na(lastBreakLbl)
             label.delete(lastBreakLbl)
-        lbl2 = label.new(bar_index, osc, "⬇ ROTURA DIRECTRIZ ALCISTA", style=label.style_label_down, color=color.new(color.red, 10), textcolor=color.white, size=size.tiny)
+        lbl2 = label.new(bar_index, osc, "⬇ Rompió soporte", style=label.style_label_down, color=color.new(color.red, 10), textcolor=color.white, size=f_sz(szRot), tooltip="El oscilador rompió hacia abajo su línea de soporte (directriz alcista): el momentum se debilita y puede empezar a bajar.")
         if showOnlyLastBreak
             lastBreakLbl := lbl2
 
 if breakResNow
     resBroken := true
-    if not mobileMode
+    if not mobileMode and szRot != "Oculto"
         if showOnlyLastBreak and not na(lastBreakLbl)
             label.delete(lastBreakLbl)
-        lbl3 = label.new(bar_index, osc, "⬆ ROTURA DIRECTRIZ BAJISTA", style=label.style_label_up, color=color.new(color.green, 10), textcolor=color.white, size=size.tiny)
+        lbl3 = label.new(bar_index, osc, "⬆ Rompió resistencia", style=label.style_label_up, color=color.new(color.green, 10), textcolor=color.white, size=f_sz(szRot), tooltip="El oscilador rompió hacia arriba su línea de resistencia (directriz bajista): el momentum se fortalece y puede empezar a subir.")
         if showOnlyLastBreak
             lastBreakLbl := lbl3
 
@@ -291,8 +302,8 @@ if showTL and barstate.islast
             endBarSup := math.max(bar_index, math.round(spb1 + (0 - sp1) / slopeSup))
             endValSup := 0.0
         dispTL := line.new(spb2, sp2, endBarSup, endValSup, color=supBroken ? color.new(color.gray, 60) : tlBullCol, style=supBroken ? line.style_dotted : line.style_solid, width=2)
-        if showTLName and not mobileMode and not supBroken
-            dispTLnm := label.new(endBarSup, endValSup, "DIRECTRIZ ALCISTA", style=label.style_label_left, color=color.new(color.green, 10), textcolor=color.white, size=size.tiny)
+        if showTLName and szTL != "Oculto" and not mobileMode and not supBroken
+            dispTLnm := label.new(endBarSup, endValSup, "↗ Soporte alcista", style=label.style_label_left, color=color.new(color.green, 10), textcolor=color.white, size=f_sz(szTL), tooltip="Línea de soporte del oscilador (directriz alcista). Mientras no se rompa, el momentum sigue a favor de las subidas.")
     if not dirBull and resExists
         slopeRes = (rp1 - rp2) / (rpb1 - rpb2)
         endBarRes = bar_index + tlProj
@@ -304,8 +315,8 @@ if showTL and barstate.islast
             endBarRes := math.max(bar_index, math.round(rpb1 + (0 - rp1) / slopeRes))
             endValRes := 0.0
         dispTL := line.new(rpb2, rp2, endBarRes, endValRes, color=resBroken ? color.new(color.gray, 60) : tlBearCol, style=resBroken ? line.style_dotted : line.style_solid, width=2)
-        if showTLName and not mobileMode and not resBroken
-            dispTLnm := label.new(endBarRes, endValRes, "DIRECTRIZ BAJISTA", style=label.style_label_left, color=color.new(color.red, 10), textcolor=color.white, size=size.tiny)
+        if showTLName and szTL != "Oculto" and not mobileMode and not resBroken
+            dispTLnm := label.new(endBarRes, endValRes, "↘ Resistencia bajista", style=label.style_label_left, color=color.new(color.red, 10), textcolor=color.white, size=f_sz(szTL), tooltip="Línea de resistencia del oscilador (directriz bajista). Mientras no se rompa, el momentum sigue a favor de las caídas.")
 
 // ------------------- SEMÁFORO -------------------
 bSupBars = ta.barssince(breakSupNow)
@@ -334,8 +345,8 @@ if showDiv and not na(dPL)
     if not na(dlBar) and pbL - dlBar >= divMinBars and pbL - dlBar <= divMaxBars and pxL < dlPx and dPL > dlOsc and dlOsc <= osLevel + divZoneTol
         bullDivNow := true
         divLines.push(line.new(dlBar, dlOsc, pbL, dPL, color=color.lime, width=2))
-        if not mobileMode
-            label.new(pbL, dPL, "Div ↑", style=label.style_label_up, color=color.new(color.lime, 20), textcolor=color.black, size=size.tiny)
+        if not mobileMode and szDiv != "Oculto"
+            label.new(pbL, dPL, "Div ↑", style=label.style_label_up, color=color.new(color.lime, 20), textcolor=color.black, size=f_sz(szDiv), tooltip="Divergencia alcista: el precio hizo un mínimo más bajo pero el oscilador uno más alto. Señal de que la caída pierde fuerza: posible giro al alza.")
     dlOsc := dPL
     dlPx  := pxL
     dlBar := pbL
@@ -346,8 +357,8 @@ if showDiv and not na(dPH)
     if not na(dhBar) and pbH - dhBar >= divMinBars and pbH - dhBar <= divMaxBars and pxH > dhPx and dPH < dhOsc and dhOsc >= obLevel - divZoneTol
         bearDivNow := true
         divLines.push(line.new(dhBar, dhOsc, pbH, dPH, color=color.fuchsia, width=2))
-        if not mobileMode
-            label.new(pbH, dPH, "Div ↓", style=label.style_label_down, color=color.new(color.fuchsia, 20), textcolor=color.white, size=size.tiny)
+        if not mobileMode and szDiv != "Oculto"
+            label.new(pbH, dPH, "Div ↓", style=label.style_label_down, color=color.new(color.fuchsia, 20), textcolor=color.white, size=f_sz(szDiv), tooltip="Divergencia bajista: el precio hizo un máximo más alto pero el oscilador uno más bajo. Señal de que la subida pierde fuerza: posible giro a la baja.")
     dhOsc := dPH
     dhPx  := pxH
     dhBar := pbH
@@ -413,10 +424,10 @@ plotshape(not mobileMode and bearSig ? 86 : na, "Señal SHORT", shape.triangledo
 plotshape(mobileMode and bearSig ? 86 : na, "Señal SHORT móvil", shape.triangledown, location.absolute, color.red, size=size.tiny)
 
 // Texto bajo el triángulo LONG y sobre el triángulo SHORT, para leer la señal a primera vista
-if bullSig
-    label.new(bar_index, 12, mobileMode ? "LONG" : "LONG · " + f_grade(scoreL) + " " + str.tostring(scoreL), style=label.style_label_up, color=color.new(color.green, 10), textcolor=color.white, size=mobileMode ? size.tiny : size.normal)
-if bearSig
-    label.new(bar_index, 88, mobileMode ? "SHORT" : "SHORT · " + f_grade(scoreS) + " " + str.tostring(scoreS), style=label.style_label_down, color=color.new(color.red, 10), textcolor=color.white, size=mobileMode ? size.tiny : size.normal)
+if bullSig and szSig != "Oculto"
+    label.new(bar_index, 12, mobileMode ? "LONG" : "LONG · " + f_grade(scoreL) + " " + str.tostring(scoreL), style=label.style_label_up, color=color.new(color.green, 10), textcolor=color.white, size=mobileMode ? size.tiny : f_sz(szSig))
+if bearSig and szSig != "Oculto"
+    label.new(bar_index, 88, mobileMode ? "SHORT" : "SHORT · " + f_grade(scoreS) + " " + str.tostring(scoreS), style=label.style_label_down, color=color.new(color.red, 10), textcolor=color.white, size=mobileMode ? size.tiny : f_sz(szSig))
 
 // Series disponibles en la ventana de datos y como fuente en otros indicadores
 plot(bullSig ? 1 : bearSig ? -1 : 0, "Señal (+1 LONG / -1 SHORT)", display=display.data_window)
@@ -427,7 +438,7 @@ plot(scoreS, "Puntaje SHORT", display=display.data_window)
 if showOscPanel and barstate.islast
     var table op = na
     if na(op)
-        op := table.new(position.top_right, 2, compactPanel ? 6 : 8, bgcolor=color.new(color.black, 75), border_width=1, border_color=color.new(color.gray, 60))
+        op := table.new(position.top_right, 2, (compactPanel ? 6 : 8) + (showOscAssist ? 1 : 0), bgcolor=color.new(color.black, 75), border_width=1, border_color=color.new(color.gray, 60))
     oSz = mobileMode ? size.tiny : oscPanelSize == "Pequeño" ? size.tiny : oscPanelSize == "Normal" ? size.small : oscPanelSize == "Grande" ? size.normal : size.large
 
     momUp  = osc > osc[1]
@@ -485,6 +496,30 @@ if showOscPanel and barstate.islast
             table.cell(op, 1, 6, divTxt, text_color=divCol, text_size=oSz)
             table.cell(op, 0, 7, "🌐 TF MAYOR " + htfTFOscUsed, text_color=color.white, text_size=oSz)
             table.cell(op, 1, 7, htfTxt, text_color=htfCol, text_size=oSz)
+
+    if showOscAssist
+        string aTxt = ""
+        color aCol = color.gray
+        if bullSig or bearSig
+            aTxt := "✅ SEÑAL " + (bullSig ? "LONG" : "SHORT") + " · grado " + f_grade(bullSig ? scoreL : scoreS) + "\nConfírmala: el precio debe estar en una zona del Order Block"
+            aCol := bullSig ? color.green : color.red
+        else if semLong
+            aTxt := "🟢 Momentum a favor de LONG\nBusca una zona de COMPRA en el Order Block"
+            aCol := color.green
+        else if semShort
+            aTxt := "🔴 Momentum a favor de SHORT\nBusca una zona de VENTA en el Order Block"
+            aCol := color.red
+        else if osc >= obLevel
+            aTxt := "⚠ Sobrecompra: puede caer\nNo compres aquí"
+            aCol := color.fuchsia
+        else if osc <= osLevel
+            aTxt := "⚠ Sobreventa: puede rebotar\nNo vendas aquí"
+            aCol := color.aqua
+        else
+            aTxt := "⏳ Sin señal\nEspera: el momentum está neutro"
+        int aRow = compactPanel ? (showScoreRows ? 6 : 4) : (showScoreRows ? 8 : 5)
+        table.cell(op, 0, aRow, "🤖 ASISTENTE", text_color=color.white, text_size=oSz)
+        table.cell(op, 1, aRow, aTxt, text_color=aCol, text_size=oSz)
 
 // ------------------- ALERTAS -------------------
 alertcondition(exhBull, "Agotamiento Alcista", "🟢 Agotamiento alcista · {{ticker}} · {{interval}}")
