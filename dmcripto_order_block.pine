@@ -41,7 +41,7 @@ colLevels   = input.int(1, "Columna de niveles y liquidaciones (velas a la derec
 colCards    = input.int(20, "Posición de las tarjetas (velas a la derecha de la última)", minval=2, maxval=80, group=grpTidy, tooltip="Si las tarjetas se salen de la pantalla, bájalo o mueve el gráfico hacia la izquierda. Si se pisan con las etiquetas de niveles, súbelo.")
 cardW       = input.int(28, "Largo de la zona detrás de la tarjeta (velas)", minval=10, maxval=80, group=grpTidy, tooltip="Cuánto se prolonga la caja de la zona a la derecha para que la tarjeta quede dentro de ella.")
 showEqBox   = input.bool(true, "Caja Equilibrio (50% del rango, entre barato y caro)", group=grpTidy, tooltip="Franja gris en el punto medio del último rango: por encima el precio está caro (premium), por debajo barato (descuento).")
-rowGapATR   = input.float(0.3, "Alto de cada línea de texto (x ATR) para separar etiquetas", minval=0.1, maxval=1.0, step=0.05, group=grpTidy, tooltip="Si ves etiquetas pegadas o encimadas, súbelo (0.4, 0.5). Si quedan muy separadas, bájalo.")
+rowGapATR   = input.float(0.4, "Alto de cada línea de texto (x ATR) para separar etiquetas", minval=0.1, maxval=1.0, step=0.05, group=grpTidy, tooltip="Si ves etiquetas pegadas o encimadas, súbelo (0.4, 0.5). Si quedan muy separadas, bájalo.")
 grpVP = "📊 Perfil de volumen (zona con más negociación)"
 showVP      = input.bool(true, "Mostrar perfil de volumen del último rango (POC y zona de valor)", group=grpVP, tooltip="Como el 'Perfil de volumen de rango fijo' de TradingView: reparte el volumen por precio según el fractal: si la tendencia es alcista, desde el mínimo fuerte (inicio del descuento) hasta el precio actual; si es bajista, desde el máximo fuerte (inicio del premium). POC = precio donde más se negoció (el más importante). Precio SOBRE el POC = sesgo alcista; BAJO el POC = bajista. Es una aproximación con las velas del gráfico.")
 vpRows      = input.int(24, "Filas del perfil", minval=8, maxval=60, group=grpVP)
@@ -369,10 +369,14 @@ var float lPHBig = na
 var float lPLBig = na
 var int lastBigUp = -1000
 var int lastBigDn = -1000
+var int lPHBigb = na
+var int lPLBigb = na
 if not na(phBig)
     lPHBig := phBig
+    lPHBigb := bar_index - swingBigLen
 if not na(plBig)
     lPLBig := plBig
+    lPLBigb := bar_index - swingBigLen
 if not na(lPHBig) and close > lPHBig and close[1] <= lPHBig
     lastBigUp := bar_index
 if not na(lPLBig) and close < lPLBig and close[1] >= lPLBig
@@ -1889,24 +1893,45 @@ posStats = mobileMode ? position.bottom_right : posEnum(stPos)
 tpAct = tStage == 2 ? tTP2 : tStage == 3 ? tTP3 : tTP
 
 // ------------------- EQUILIBRIO + PERFIL DE VOLUMEN -------------------
+// Rango del fractal (como el Smart Box del video): con tendencia alcista va del mínimo fuerte (inicio del descuento) al
+// máximo actual; con bajista, del máximo fuerte (inicio del premium) al mínimo actual. Usa los pivotes SWING (grandes)
+// y, si todavía no hay, los pivotes normales.
+var float rgHi = na
+var float rgLo = na
+var int rgStart = na
+var bool rgUp = true
+if barstate.islast
+    bool bigOk = not na(lPHBigb) and not na(lPLBigb)
+    rgUp := bigOk ? lastBigUp > lastBigDn : trendUp
+    int aB = bigOk ? (rgUp ? lPLBigb : lPHBigb) : (rgUp ? nz(lPLb, bar_index) : nz(lPHb, bar_index))
+    if bar_index - aB < 5
+        aB := bigOk ? math.min(lPHBigb, lPLBigb) : math.min(nz(lPHb, bar_index), nz(lPLb, bar_index))
+    rgStart := math.max(aB, bar_index - 480)
+    rgHi := high
+    rgLo := low
+    for i = 0 to bar_index - rgStart
+        rgHi := math.max(rgHi, high[i])
+        rgLo := math.min(rgLo, low[i])
+
 var box eqBox = na
-if barstate.islast and showEqBox and not na(lPH) and not na(lPL)
+if barstate.islast and showEqBox and not na(rgHi) and rgHi > rgLo
     if not na(eqBox)
         box.delete(eqBox)
-    float eqBand = math.max(math.abs(lPH - lPL) * 0.03, atr * 0.15)
-    eqBox := box.new(bar_index - 25, eq + eqBand, bar_index + colCards + cardW, eq - eqBand, border_color=color.new(color.gray, 55), bgcolor=color.new(color.gray, 82), text="Equilibrio", text_color=color.new(color.white, 25), text_size=size.small, text_halign=text.align_right, text_valign=text.align_center)
+    float rgEq = (rgHi + rgLo) / 2
+    float eqBand = math.max((rgHi - rgLo) * 0.03, atr * 0.15)
+    eqBox := box.new(rgStart, rgEq + eqBand, bar_index + colCards + cardW, rgEq - eqBand, border_color=color.new(color.gray, 55), bgcolor=color.new(color.gray, 82), text="Equilibrio", text_color=color.new(color.white, 25), text_size=size.small, text_halign=text.align_right, text_valign=text.align_center)
 
 var box pzBox = na
 var box dzBox = na
-if barstate.islast and showPDZ and not na(lPH) and not na(lPL) and not na(lPHb) and not na(lPLb)
+if barstate.islast and showPDZ and not na(rgHi) and rgHi > rgLo
     if not na(pzBox)
         box.delete(pzBox)
     if not na(dzBox)
         box.delete(dzBox)
-    float pdZ = math.abs(lPH - lPL) * pdZonePct / 100
+    float pdZ = (rgHi - rgLo) * pdZonePct / 100
     int pdR = bar_index + colCards + cardW
-    pzBox := box.new(math.max(lPHb, bar_index - 480), lPH, pdR, lPH - pdZ, border_color=color.new(color.red, 55), bgcolor=color.new(color.red, 88), text="Premium (caro)", text_color=color.new(color.red, 10), text_size=size.small, text_halign=text.align_right, text_valign=text.align_bottom)
-    dzBox := box.new(math.max(lPLb, bar_index - 480), lPL + pdZ, pdR, lPL, border_color=color.new(color.green, 55), bgcolor=color.new(color.green, 88), text="Discount (barato)", text_color=color.new(color.green, 10), text_size=size.small, text_halign=text.align_right, text_valign=text.align_top)
+    pzBox := box.new(rgStart, rgHi, pdR, rgHi - pdZ, border_color=color.new(color.red, 55), bgcolor=color.new(color.red, 88), text="Premium (caro)", text_color=color.new(color.red, 10), text_size=size.small, text_halign=text.align_right, text_valign=text.align_bottom)
+    dzBox := box.new(rgStart, rgLo + pdZ, pdR, rgLo, border_color=color.new(color.green, 55), bgcolor=color.new(color.green, 88), text="Discount (barato)", text_color=color.new(color.green, 10), text_size=size.small, text_halign=text.align_right, text_valign=text.align_top)
 
 var array<box> vpBoxes = array.new<box>()
 var array<line> vpLines = array.new<line>()
@@ -1914,7 +1939,7 @@ var label vpPocLbl = na
 var float vpPoc = na
 var float vpVah = na
 var float vpVal = na
-if barstate.islast and showVP and not na(lPHb) and not na(lPLb)
+if barstate.islast and showVP and not na(rgStart)
     while vpBoxes.size() > 0
         box.delete(vpBoxes.pop())
     while vpLines.size() > 0
@@ -1922,12 +1947,7 @@ if barstate.islast and showVP and not na(lPHb) and not na(lPLb)
     if not na(vpPocLbl)
         label.delete(vpPocLbl)
         vpPocLbl := na
-    // Rango según el fractal: tendencia alcista = desde el mínimo fuerte (inicio del descuento) hasta el precio actual;
-    // bajista = desde el máximo fuerte (inicio del premium). Si el tramo es muy corto, usa el pivote más antiguo.
-    int vpAnchor = trendUp ? lPLb : lPHb
-    if bar_index - vpAnchor < 5
-        vpAnchor := math.min(lPHb, lPLb)
-    int vpStart = math.max(vpAnchor, bar_index - vpMaxBars)
+    int vpStart = math.max(rgStart, bar_index - vpMaxBars)
     int vpN = bar_index - vpStart + 1
     float vpHi = high
     float vpLo = low
