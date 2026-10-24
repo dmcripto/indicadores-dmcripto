@@ -52,6 +52,7 @@ vpWidthPct  = input.int(25, "Ancho máximo de las barras (% del rango en velas)"
 vpVA        = input.int(70, "Zona de valor (% del volumen)", minval=50, maxval=95, group=grpVP)
 vpDelta     = input.bool(true, "Colorear por quién dominó (verde compradores / rojo vendedores)", group=grpVP, tooltip="Aproxima el delta de cada fila con la posición del cierre dentro de cada vela.")
 structKeep  = input.int(8, "Cuántas rupturas de estructura dejar dibujadas (BOS/CHoCH/iBOS/iCHoCH)", minval=2, maxval=30, group=grpTidy, tooltip="Solo se conservan las últimas para no llenar el gráfico.")
+lvlLineBack = input.int(30, "Líneas de niveles: cuántas velas hacia atrás se dibujan (terminan en su etiqueta)", minval=0, maxval=200, group=grpTidy, tooltip="Las líneas punteadas de niveles (PDH, PWH, liquidaciones...) ya no cruzan todo el gráfico hasta el precio: empiezan unas velas atrás y terminan en su etiqueta. 0 = solo desde la última vela.")
 showHHLL    = input.bool(true, "Marcar HH / HL / LH / LL en los pivotes", group=grpTidy, tooltip="HH = máximo más alto, HL = mínimo más alto (tendencia alcista); LH = máximo más bajo, LL = mínimo más bajo (tendencia bajista).")
 showPDZ     = input.bool(true, "Zonas Premium (caro) y Discount (barato) del último rango", group=grpTidy, tooltip="Franja roja arriba del rango (zona cara para comprar, buena para vender) y verde abajo (zona barata para comprar).")
 pdZonePct   = input.int(8, "Alto de las zonas Premium/Discount (% del rango)", minval=3, maxval=30, group=grpTidy)
@@ -457,7 +458,7 @@ while hhLbls.size() > structKeep
     label.delete(hhLbls.shift())
 
 f_hLine(float y, color col, int w, int sty) =>
-    line.new(bar_index - 1, y, bar_index, y, extend=extend.right, color=col, width=w, style=sty == 1 ? line.style_dashed : sty == 2 ? line.style_dotted : line.style_solid)
+    line.new(bar_index - lvlLineBack, y, bar_index + colLevels, y, color=col, width=w, style=sty == 1 ? line.style_dashed : sty == 2 ? line.style_dotted : line.style_solid)
 
 type LiqLevel
     line ln
@@ -1506,7 +1507,7 @@ var label nMaxT = na
 var label nMinT = na
 
 f_line(int x, float y, color col) =>
-    line.new(x, y, bar_index, y, extend=extend.right, color=col, style=line.style_dashed, width=1)
+    line.new(x, y, bar_index + 2, y, color=col, style=line.style_dashed, width=1)
 
 f_lbl(float y, string txt, color col, bool above) =>
     label.new(bar_index - 2, y, txt, style=above ? label.style_label_down : label.style_label_up, color=col, textcolor=color.white, size=lblSize)
@@ -2069,7 +2070,7 @@ if barstate.islast and showVP and not na(rgStart)
         vpPoc := vpLo + (pocR + 0.5) * vpStep
         vpVah := vpLo + (vaHi + 1) * vpStep
         vpVal := vpLo + vaLo * vpStep
-        vpLines.push(line.new(vpStart, vpPoc, bar_index + 1, vpPoc, extend=extend.right, color=color.new(color.yellow, 10), style=line.style_dashed, width=1))
+        vpLines.push(line.new(vpStart, vpPoc, bar_index + colLevels, vpPoc, color=color.new(color.yellow, 10), style=line.style_dashed, width=1))
         vpLines.push(line.new(vpStart, vpVah, bar_index + 1, vpVah, color=color.new(color.gray, 35), style=line.style_dotted, width=1))
         vpLines.push(line.new(vpStart, vpVal, bar_index + 1, vpVal, color=color.new(color.gray, 35), style=line.style_dotted, width=1))
         if szPoc != "Oculto"
