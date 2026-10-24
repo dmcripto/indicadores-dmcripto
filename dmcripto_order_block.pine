@@ -167,6 +167,18 @@ grpLbl = "🔤 Etiquetas"
 lblSizeInput = input.string("Pequeño", "Tamaño de etiquetas del gráfico", options=["Muy pequeño", "Pequeño", "Normal", "Grande"], group=grpLbl, tooltip="Controla el tamaño de TODAS las etiquetas: ENTRADA/TP/SL, LONG/SHORT, BOS/CHoCH, sesiones, MÁX/MÍN ANTERIOR, PB y 💧.")
 lblSize = lblSizeInput == "Muy pequeño" ? size.tiny : lblSizeInput == "Pequeño" ? size.small : lblSizeInput == "Normal" ? size.normal : size.large
 
+grpSz = "🔠 Tamaño de etiquetas por tipo"
+szLvl    = input.string("Pequeño", "Niveles previos (PDH, PWH, PDL, PWL, PMH, PML)", options=["Oculto", "Muy pequeño", "Pequeño", "Normal", "Grande"], group=grpSz, tooltip="Elige el tamaño de cada tipo de etiqueta, o 'Oculto' para quitarla (la línea del nivel sigue en el gráfico). Si dos etiquetas se pisan, baja el tamaño de una.")
+szLiq    = input.string("Pequeño", "Liquidaciones (LIQ LARGOS / CORTOS)", options=["Oculto", "Muy pequeño", "Pequeño", "Normal", "Grande"], group=grpSz)
+szPoc    = input.string("Pequeño", "POC (perfil de volumen)", options=["Oculto", "Muy pequeño", "Pequeño", "Normal", "Grande"], group=grpSz)
+szCard   = input.string("Pequeño", "Tarjetas de zonas OB / FVG ('Oculto' deja solo el icono ⓘ)", options=["Oculto", "Muy pequeño", "Pequeño", "Normal", "Grande"], group=grpSz)
+szStruct = input.string("Pequeño", "Estructura BOS / CHoCH", options=["Oculto", "Muy pequeño", "Pequeño", "Normal", "Grande"], group=grpSz)
+szPos    = input.string("Muy pequeño", "POSIBLE LONG / SHORT", options=["Oculto", "Muy pequeño", "Pequeño", "Normal", "Grande"], group=grpSz)
+lblShort = input.bool(true, "Texto corto en liquidaciones (sin '~' ni 'est.')", group=grpSz)
+
+f_sz(string s) => s == "Muy pequeño" ? size.tiny : s == "Pequeño" ? size.small : s == "Normal" ? size.normal : size.large
+f_hf(string s) => s == "Muy pequeño" ? 0.7 : s == "Pequeño" ? 1.0 : s == "Normal" ? 1.35 : 1.8
+
 grpOsc = "🔗 Oscilador (IGUAL que en el OSCILADOR V3.0)"
 rsiLenConf   = input.int(14, "RSI", group=grpOsc)
 stochLenConf = input.int(14, "Estocástico", group=grpOsc)
@@ -413,7 +425,7 @@ f_structMark(int x1, float lvl, bool bull, string txt, bool internal) =>
     int xm = math.round((xs + bar_index) / 2.0)
     color c = bull ? color.new(color.teal, 0) : color.new(color.red, 0)
     structLines.push(line.new(xs, lvl, bar_index, lvl, color=c, style=internal ? line.style_dashed : line.style_solid, width=1))
-    structLbls.push(label.new(xm, lvl, txt, style=bull ? label.style_label_down : label.style_label_up, color=color.new(color.white, 100), textcolor=c, size=internal ? size.tiny : size.small))
+    structLbls.push(label.new(xm, lvl, txt, style=bull ? label.style_label_down : label.style_label_up, color=color.new(color.white, 100), textcolor=c, size=internal ? size.tiny : f_sz(szStruct)))
     while structLines.size() > structKeep
         line.delete(structLines.shift())
     while structLbls.size() > structKeep
@@ -424,9 +436,9 @@ if showInternalStruct and ibosUp and not na(ilPHb)
     f_structMark(ilPHb, ilPH, true, ichochUp ? "iCHoCH" : "iBOS", true)
 if showInternalStruct and ibosDn and not na(ilPLb)
     f_structMark(ilPLb, ilPL, false, ichochDn ? "iCHoCH" : "iBOS", true)
-if showStruct and bosUp and not na(lPHb)
+if showStruct and szStruct != "Oculto" and bosUp and not na(lPHb)
     f_structMark(lPHb, lPH, true, chochUp ? "CHoCH" : "BOS", false)
-if showStruct and bosDn and not na(lPLb)
+if showStruct and szStruct != "Oculto" and bosDn and not na(lPLb)
     f_structMark(lPLb, lPL, false, chochDn ? "CHoCH" : "BOS", false)
 
 // HH / HL / LH / LL en los pivotes de la estructura principal
@@ -521,8 +533,8 @@ while iH >= 0
                     line.set_color(lvl.ln, resCol)
                     line.set_width(lvl.ln, 2)
                     line.set_style(lvl.ln, line.style_solid)
-                if showSRLabel and na(lvl.lb)
-                    lvl.lb := label.new(bar_index, lvl.lvl, "RESISTENCIA " + f_px(lvl.lvl), style=label.style_label_left, color=resCol, textcolor=color.white, size=lblSize)
+                if showSRLabel and szLvl != "Oculto" and na(lvl.lb)
+                    lvl.lb := label.new(bar_index, lvl.lvl, "RESISTENCIA " + f_px(lvl.lvl), style=label.style_label_left, color=resCol, textcolor=color.white, size=f_sz(szLvl))
         realSweepHigh = high > lvl.lvl + atr * liqTolATR and close < lvl.lvl
         brokeAboveHigh = close > lvl.lvl
         if realSweepHigh or brokeAboveHigh
@@ -550,8 +562,8 @@ while iL >= 0
                     line.set_color(lvl.ln, supCol)
                     line.set_width(lvl.ln, 2)
                     line.set_style(lvl.ln, line.style_solid)
-                if showSRLabel and na(lvl.lb)
-                    lvl.lb := label.new(bar_index, lvl.lvl, "SOPORTE " + f_px(lvl.lvl), style=label.style_label_left, color=supCol, textcolor=color.white, size=lblSize)
+                if showSRLabel and szLvl != "Oculto" and na(lvl.lb)
+                    lvl.lb := label.new(bar_index, lvl.lvl, "SOPORTE " + f_px(lvl.lvl), style=label.style_label_left, color=supCol, textcolor=color.white, size=f_sz(szLvl))
         realSweepLow = low < lvl.lvl - atr * liqTolATR and close > lvl.lvl
         brokeBelowLow = close < lvl.lvl
         if realSweepLow or brokeBelowLow
@@ -644,10 +656,10 @@ if barstate.islast
     if not na(posLongTag)
         label.delete(posLongTag)
         posLongTag := na
-    if liqHint and not na(nearHigh)
-        posShortTag := label.new(bar_index, nearHigh, "POSIBLE SHORT · " + f_px(nearHigh), style=label.style_label_left, color=color.red, textcolor=color.white, size=size.tiny)
-    if liqHint and not na(nearLow)
-        posLongTag := label.new(bar_index, nearLow, "POSIBLE LONG · " + f_px(nearLow), style=label.style_label_left, color=color.green, textcolor=color.white, size=size.tiny)
+    if liqHint and not na(nearHigh) and szPos != "Oculto"
+        posShortTag := label.new(bar_index, nearHigh, "POSIBLE SHORT · " + f_px(nearHigh), style=label.style_label_left, color=color.red, textcolor=color.white, size=f_sz(szPos))
+    if liqHint and not na(nearLow) and szPos != "Oculto"
+        posLongTag := label.new(bar_index, nearLow, "POSIBLE LONG · " + f_px(nearLow), style=label.style_label_left, color=color.green, textcolor=color.white, size=f_sz(szPos))
 
 if barstate.islast
     if liqHigh.size() > 0
@@ -792,11 +804,13 @@ if barstate.islast and showExt
 
 var array<line>  extLines = array.new<line>()
 var array<label> extLbls  = array.new<label>()
+var array<float> extHf = array.new<float>()
 if barstate.islast and showExt
     while extLines.size() > 0
         line.delete(extLines.pop())
     while extLbls.size() > 0
         label.delete(extLbls.pop())
+    extHf.clear()
     float extMax = 0.0
     if extAm.size() > 0
         for i = 0 to extAm.size() - 1
@@ -812,7 +826,13 @@ if barstate.islast and showExt
                 int we = extMax > 0 and not na(ae) ? 1 + math.round(ae / extMax * 3) : 1
                 int sty = te == "LIQ_LONG" or te == "LIQ_SHORT" ? 1 : te == "EST_LONG" or te == "EST_SHORT" or te == "PREV" ? 2 : 0
                 extLines.push(f_hLine(pe, ce, we, sty))
-                extLbls.push(label.new(bar_index + 1, pe, f_extName(i) + " " + f_px(pe) + (na(ae) ? "" : " · " + str.tostring(ae, "#.#") + "M"), style=label.style_label_left, color=color.new(ce, 15), textcolor=te == "LIQ_LONG" or te == "EST_LONG" or te == "PREV" ? color.black : color.white, size=lblSize))
+                string szX = te == "PREV" ? szLvl : szLiq
+                if szX != "Oculto"
+                    string nmE = f_extName(i)
+                    if lblShort
+                        nmE := str.replace_all(str.replace_all(nmE, " est.", ""), "~", "")
+                    extLbls.push(label.new(bar_index + 1, pe, nmE + " " + f_px(pe) + (na(ae) ? "" : " · " + str.tostring(ae, "#.#") + "M"), style=label.style_label_left, color=color.new(ce, 15), textcolor=te == "LIQ_LONG" or te == "EST_LONG" or te == "PREV" ? color.black : color.white, size=f_sz(szX)))
+                    extHf.push(f_hf(szX))
 
 // Más cercana por encima y por debajo del precio (para el panel), solo entre las visibles
 int extUpIdx = -1
@@ -1274,11 +1294,13 @@ if fzs.size() > 0
 // Las tarjetas laterales se juntan en UNA sola etiqueta (las 2 zonas más cercanas al precio) para no pisarse.
 var array<label> infoLbls = array.new<label>()
 var array<label> cardIcons = array.new<label>()
+var array<float> cardHf = array.new<float>()
 if barstate.islast
     while infoLbls.size() > 0
         label.delete(infoLbls.pop())
     while cardIcons.size() > 0
         label.delete(cardIcons.pop())
+    cardHf.clear()
     array<float> zMid = array.new<float>()
     array<float> zRv = array.new<float>()
     array<float> zH = array.new<float>()
@@ -1403,12 +1425,16 @@ if barstate.islast
         for rr = 0 to nS - 1
             int qi = dOrd.get(rr)
             if rr < maxSideCards
-                infoLbls.push(label.new(bar_index + colCards, sMid.get(qi), sTx.get(qi), style=label.style_label_left, color=sCol.get(qi), textcolor=color.white, size=size.small, tooltip=showTips ? sTip.get(qi) : ""))
-                cardIcons.push(label.new(bar_index + colCards - 2, sMid.get(qi), "ⓘ", style=label.style_label_left, color=sCol.get(qi), textcolor=color.white, size=size.small, tooltip=showTips ? sTip.get(qi) : ""))
+                bool cardHide = szCard == "Oculto"
+                string szC = cardHide ? "Pequeño" : szCard
+                infoLbls.push(label.new(bar_index + colCards, sMid.get(qi), cardHide ? "ⓘ" : sTx.get(qi), style=label.style_label_left, color=sCol.get(qi), textcolor=color.white, size=f_sz(szC), tooltip=showTips ? sTip.get(qi) : ""))
+                cardHf.push(f_hf(szC))
+                cardIcons.push(cardHide ? label(na) : label.new(bar_index + colCards - 2, sMid.get(qi), "ⓘ", style=label.style_label_left, color=sCol.get(qi), textcolor=color.white, size=f_sz(szC), tooltip=showTips ? sTip.get(qi) : ""))
                 if not na(sBx.get(qi))
                     box.set_right(sBx.get(qi), bar_index + colCards + cardW)
             else if showTips
                 infoLbls.push(label.new(bar_index + colCards, sMid.get(qi), "ⓘ", style=label.style_label_left, color=sCol.get(qi), textcolor=color.white, size=size.small, tooltip=sTip.get(qi)))
+                cardHf.push(1.0)
                 cardIcons.push(label(na))
     if nS > 0 and not cardsSide
         int i1 = 0
@@ -1528,15 +1554,15 @@ plot(showPDL ? pdl : na, "MÍN. ANTERIOR", color=color.new(color.white, 30), lin
 
 var label pdhT = na
 var label pdlT = na
-if showPDH and not mobileMode and newDay
+if showPDH and not mobileMode and newDay and szLvl != "Oculto"
     if not na(pdhT)
         label.delete(pdhT)
-    pdhT := label.new(bar_index, pdh, "MÁX. ANTERIOR", style=label.style_label_left, color=color.new(color.black, 40), textcolor=color.white, size=lblSize)
+    pdhT := label.new(bar_index, pdh, "MÁX. ANTERIOR", style=label.style_label_left, color=color.new(color.black, 40), textcolor=color.white, size=f_sz(szLvl))
 
-if showPDL and not mobileMode and newDay
+if showPDL and not mobileMode and newDay and szLvl != "Oculto"
     if not na(pdlT)
         label.delete(pdlT)
-    pdlT := label.new(bar_index, pdl, "MÍN. ANTERIOR", style=label.style_label_left, color=color.new(color.black, 40), textcolor=color.white, size=lblSize)
+    pdlT := label.new(bar_index, pdl, "MÍN. ANTERIOR", style=label.style_label_left, color=color.new(color.black, 40), textcolor=color.white, size=f_sz(szLvl))
 
 eq = (lPH + lPL) / 2
 plot(showEQ ? eq : na, "Equilibrium", color.new(color.white, 55), 1, plot.style_linebr)
@@ -1998,7 +2024,8 @@ if barstate.islast and showVP and not na(rgStart)
         vpLines.push(line.new(vpStart, vpPoc, bar_index + 1, vpPoc, extend=extend.right, color=color.new(color.yellow, 10), style=line.style_dashed, width=1))
         vpLines.push(line.new(vpStart, vpVah, bar_index + 1, vpVah, color=color.new(color.gray, 35), style=line.style_dotted, width=1))
         vpLines.push(line.new(vpStart, vpVal, bar_index + 1, vpVal, color=color.new(color.gray, 35), style=line.style_dotted, width=1))
-        vpPocLbl := label.new(bar_index + 1, vpPoc, "POC " + f_px(vpPoc), style=label.style_label_left, color=color.new(color.yellow, 15), textcolor=color.black, size=lblSize, tooltip="POC: el precio donde más se negoció en el rango. Sobre el POC el mercado está alcista; bajo el POC, bajista. Entre VAL y VAH está la zona de valor (donde se concentró el " + str.tostring(vpVA) + "% del volumen).")
+        if szPoc != "Oculto"
+            vpPocLbl := label.new(bar_index + 1, vpPoc, "POC " + f_px(vpPoc), style=label.style_label_left, color=color.new(color.yellow, 15), textcolor=color.black, size=f_sz(szPoc), tooltip="POC: el precio donde más se negoció en el rango. Sobre el POC el mercado está alcista; bajo el POC, bajista. Entre VAL y VAH está la zona de valor (donde se concentró el " + str.tostring(vpVA) + "% del volumen).")
 
 if showEntryPanel and barstate.islast
     var table et = na
@@ -2099,7 +2126,7 @@ if showStats and barstate.islast
 // ------------------- ORDEN FINAL DE ETIQUETAS (derecha) -------------------
 // Cada columna se ordena de arriba abajo y se separa en vertical según el alto estimado de su texto,
 // así niveles, liquidaciones y tarjetas no se encimen.
-f_spread(array<label> ls, array<label> comp, int xOff, int compDx) =>
+f_spread(array<label> ls, array<label> comp, array<float> hf, int xOff, int compDx) =>
     int n = ls.size()
     if n > 0
         array<float> ys = array.new<float>()
@@ -2110,7 +2137,7 @@ f_spread(array<label> ls, array<label> comp, int xOff, int compDx) =>
         for k = 0 to n - 1
             label lbk = ls.get(ord.get(k))
             int rows = array.size(str.split(label.get_text(lbk), "\n"))
-            float hh = rowGapATR * atr * rows
+            float hh = rowGapATR * atr * rows * (hf.size() == n ? hf.get(ord.get(k)) : 1.0)
             float yy = ys.get(ord.get(k))
             if not na(prevBot) and yy + hh / 2 > prevBot
                 yy := prevBot - hh / 2
@@ -2123,31 +2150,40 @@ f_spread(array<label> ls, array<label> comp, int xOff, int compDx) =>
 
 if barstate.islast and tidyRight
     array<label> colA = array.new<label>()
+    array<float> colHf = array.new<float>()
     if showExt and extLbls.size() > 0
         for i = 0 to extLbls.size() - 1
             colA.push(extLbls.get(i))
+            colHf.push(extHf.size() > i ? extHf.get(i) : 1.0)
     if not na(pdhT)
         colA.push(pdhT)
+        colHf.push(f_hf(szLvl))
     if not na(pdlT)
         colA.push(pdlT)
+        colHf.push(f_hf(szLvl))
     if not na(vpPocLbl)
         colA.push(vpPocLbl)
+        colHf.push(f_hf(szPoc))
     if not na(posShortTag)
         colA.push(posShortTag)
+        colHf.push(f_hf(szPos))
     if not na(posLongTag)
         colA.push(posLongTag)
+        colHf.push(f_hf(szPos))
     if liqHigh.size() > 0
         for i = 0 to liqHigh.size() - 1
             LiqLevel qh = liqHigh.get(i)
             if not na(qh.lb) and f_near(qh.lvl)
                 colA.push(qh.lb)
+                colHf.push(f_hf(szLvl))
     if liqLow.size() > 0
         for i = 0 to liqLow.size() - 1
             LiqLevel ql = liqLow.get(i)
             if not na(ql.lb) and f_near(ql.lvl)
                 colA.push(ql.lb)
-    f_spread(colA, array.new<label>(), colLevels, 0)
-    f_spread(infoLbls, cardIcons, colCards, -2)
+                colHf.push(f_hf(szLvl))
+    f_spread(colA, array.new<label>(), colHf, colLevels, 0)
+    f_spread(infoLbls, cardIcons, cardHf, colCards, -2)
 
 alertcondition(bullSig, "LONG confirmado", "🟢 LONG · {{ticker}} · {{interval}}")
 alertcondition(bearSig, "SHORT confirmado", "🔴 SHORT · {{ticker}} · {{interval}}")
