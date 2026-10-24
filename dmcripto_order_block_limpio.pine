@@ -51,7 +51,7 @@ vpWidthBars = input.int(12, "Ancho máximo de las barras pegadas a la derecha (v
 vpWidthPct  = input.int(25, "Ancho máximo de las barras (% del rango en velas)", minval=5, maxval=60, group=grpVP)
 vpVA        = input.int(70, "Zona de valor (% del volumen)", minval=50, maxval=95, group=grpVP)
 vpDelta     = input.bool(true, "Colorear por quién dominó (verde compradores / rojo vendedores)", group=grpVP, tooltip="Aproxima el delta de cada fila con la posición del cierre dentro de cada vela.")
-structKeep  = input.int(8, "Cuántas rupturas de estructura dejar dibujadas (BOS/CHoCH/iBOS/iCHoCH)", minval=2, maxval=30, group=grpTidy, tooltip="Solo se conservan las últimas para no llenar el gráfico.")
+structKeep  = input.int(6, "Cuántas rupturas de estructura dejar dibujadas (BOS/CHoCH/iBOS/iCHoCH)", minval=2, maxval=30, group=grpTidy, tooltip="Solo se conservan las últimas para no llenar el gráfico.")
 lvlLineBack = input.int(30, "Líneas de niveles: cuántas velas hacia atrás se dibujan (terminan en su etiqueta)", minval=0, maxval=200, group=grpTidy, tooltip="Las líneas punteadas de niveles (PDH, PWH, liquidaciones...) ya no cruzan todo el gráfico hasta el precio: empiezan unas velas atrás y terminan en su etiqueta. 0 = solo desde la última vela.")
 showHHLL    = input.bool(true, "Marcar HH / HL / LH / LL en los pivotes", group=grpTidy, tooltip="HH = máximo más alto, HL = mínimo más alto (tendencia alcista); LH = máximo más bajo, LL = mínimo más bajo (tendencia bajista).")
 showPDZ     = input.bool(true, "Zonas Premium (caro) y Discount (barato) del último rango", group=grpTidy, tooltip="Franja roja arriba del rango (zona cara para comprar, buena para vender) y verde abajo (zona barata para comprar).")
@@ -178,6 +178,8 @@ szPoc    = input.string("Pequeño", "POC (perfil de volumen)", options=["Oculto"
 szCard   = input.string("Pequeño", "Tarjetas de zonas OB / FVG ('Oculto' deja solo el icono ⓘ)", options=["Oculto", "Muy pequeño", "Pequeño", "Normal", "Grande"], group=grpSz)
 szStruct = input.string("Pequeño", "Estructura BOS / CHoCH", options=["Oculto", "Muy pequeño", "Pequeño", "Normal", "Grande"], group=grpSz)
 szWhy    = input.string("Pequeño", "Avisos «tocó zona pero no es señal» (✖ falta: ...)", options=["Oculto", "Muy pequeño", "Pequeño", "Normal", "Grande"], group=grpSz, tooltip="Naranja con texto negro para que se lea bien. Dice en palabras simples qué filtro falta. Pasa el mouse para ver el detalle.")
+szHL     = input.string("Pequeño", "HH / HL / LH / LL en los pivotes", options=["Oculto", "Muy pequeño", "Pequeño", "Normal", "Grande"], group=grpSz)
+szIStruct = input.string("Pequeño", "Estructura interna iBOS / iCHoCH", options=["Oculto", "Muy pequeño", "Pequeño", "Normal", "Grande"], group=grpSz)
 szPos    = input.string("Muy pequeño", "POSIBLE LONG / SHORT", options=["Oculto", "Muy pequeño", "Pequeño", "Normal", "Grande"], group=grpSz)
 lblShort = input.bool(true, "Texto corto en liquidaciones (sin '~' ni 'est.')", group=grpSz)
 lblIcons = input.bool(true, "Etiquetas con iconos y palabras simples (en vez de siglas PDH / PWH / LIQ / POC)", group=grpSz, tooltip="ON: 📅 Máx. de ayer, 📆 Mín. semana, ⬆💥 Cortos 25x (liquidación de cortos), 🎯 POC... y al pasar el mouse sobre la etiqueta se explica qué significa. OFF: siglas técnicas.")
@@ -432,16 +434,16 @@ f_structMark(int x1, float lvl, bool bull, string txt, bool internal) =>
     int xm = math.round((xs + bar_index) / 2.0)
     color c = bull ? color.new(color.teal, 0) : color.new(color.red, 0)
     structLines.push(line.new(xs, lvl, bar_index, lvl, color=c, style=internal ? line.style_dashed : line.style_solid, width=1))
-    structLbls.push(label.new(xm, lvl, txt, style=bull ? label.style_label_down : label.style_label_up, color=color.new(color.white, 100), textcolor=c, size=internal ? size.tiny : f_sz(szStruct)))
+    structLbls.push(label.new(xm, lvl, txt, style=bull ? label.style_label_down : label.style_label_up, color=color.new(color.white, 100), textcolor=c, size=internal ? f_sz(szIStruct) : f_sz(szStruct)))
     while structLines.size() > structKeep
         line.delete(structLines.shift())
     while structLbls.size() > structKeep
         label.delete(structLbls.shift())
 
 showStruct = not masterClean or showBOSLabels
-if showInternalStruct and ibosUp and not na(ilPHb)
+if showInternalStruct and szIStruct != "Oculto" and ibosUp and not na(ilPHb) and not (bosUp and ilPH == lPH)
     f_structMark(ilPHb, ilPH, true, ichochUp ? "iCHoCH" : "iBOS", true)
-if showInternalStruct and ibosDn and not na(ilPLb)
+if showInternalStruct and szIStruct != "Oculto" and ibosDn and not na(ilPLb) and not (bosDn and ilPL == lPL)
     f_structMark(ilPLb, ilPL, false, ichochDn ? "iCHoCH" : "iBOS", true)
 if showStruct and szStruct != "Oculto" and bosUp and not na(lPHb)
     f_structMark(lPHb, lPH, true, chochUp ? "CHoCH" : "BOS", false)
@@ -450,10 +452,10 @@ if showStruct and szStruct != "Oculto" and bosDn and not na(lPLb)
 
 // HH / HL / LH / LL en los pivotes de la estructura principal
 var array<label> hhLbls = array.new<label>()
-if showHHLL and not na(ph) and not na(lPH[1])
-    hhLbls.push(label.new(bar_index - swingLen, ph, ph > lPH[1] ? "HH" : "LH", style=label.style_label_down, color=color.new(color.white, 100), textcolor=ph > lPH[1] ? color.teal : color.red, size=size.tiny))
-if showHHLL and not na(pl) and not na(lPL[1])
-    hhLbls.push(label.new(bar_index - swingLen, pl, pl > lPL[1] ? "HL" : "LL", style=label.style_label_up, color=color.new(color.white, 100), textcolor=pl > lPL[1] ? color.teal : color.red, size=size.tiny))
+if showHHLL and szHL != "Oculto" and not na(ph) and not na(lPH[1])
+    hhLbls.push(label.new(bar_index - swingLen, ph, ph > lPH[1] ? "HH" : "LH", style=label.style_label_down, color=color.new(ph > lPH[1] ? color.teal : color.red, 55), textcolor=color.white, size=f_sz(szHL)))
+if showHHLL and szHL != "Oculto" and not na(pl) and not na(lPL[1])
+    hhLbls.push(label.new(bar_index - swingLen, pl, pl > lPL[1] ? "HL" : "LL", style=label.style_label_up, color=color.new(pl > lPL[1] ? color.teal : color.red, 55), textcolor=color.white, size=f_sz(szHL)))
 while hhLbls.size() > structKeep
     label.delete(hhLbls.shift())
 
