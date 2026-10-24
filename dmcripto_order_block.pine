@@ -205,6 +205,7 @@ ctxMode = input.string("Bloquear señales en contra", "Modo CONTEXTO ADX", optio
 
 grpEntry = "🎯 Entrada / TP / SL"
 showEntryPanel = input.bool(true, "Mostrar panel de operación", group=grpEntry)
+panelCompact = input.bool(true, "Panel compacto (solo lo esencial: estado, asistente, zona, oscilador, perfil y sesión)", group=grpEntry, tooltip="ON: panel chico que no tapa el gráfico. OFF: panel completo con ratio, ADX, DI, delta, liquidaciones, dominancia y tamaño de posición.")
 showTradeLines = input.bool(false, "Dibujar también líneas Entrada/TP/SL", group=grpEntry)
 showTradeZones = input.bool(true, "Zonas sombreadas de riesgo (rojo) y ganancia (verde)", group=grpEntry)
 rrInput = input.string("Automático", "Riesgo:Beneficio (TP1)", options=["0.5:1", "0.8:1", "1:1", "1.2:1", "1.5:1", "2:1", "3:1", "Automático"], group=grpEntry)
@@ -2077,7 +2078,7 @@ if barstate.islast and showVP and not na(rgStart)
 if showEntryPanel and barstate.islast
     var table et = na
     if na(et)
-        et := table.new(posEntry, 2, 17, bgcolor=color.new(color.black, 75), border_width=1, border_color=color.new(color.gray, 60))
+        et := table.new(posEntry, 2, panelCompact ? 6 : 17, bgcolor=color.new(color.black, 75), border_width=1, border_color=color.new(color.gray, 60))
     estado = tDir == 1 ? "LONG ACTIVO" : tDir == -1 ? "SHORT ACTIVO" : "ESPERANDO SEÑAL"
     estCol = tDir == 1 ? color.green : tDir == -1 ? color.red : color.gray
     zonaTxt = (setupBullA ? "🐋 BALLENA + ZONA LONG = A+" : setupBearA ? "🐋 BALLENA + ZONA SHORT = A+" : bullIn ? "🎯 EN OB ALCISTA" : bearIn ? "🎯 EN OB BAJISTA" : bullFIn ? "🎯 EN FVG ALCISTA" : bearFIn ? "🎯 EN FVG BAJISTA" : bullNear ? "⚠ OB ALCISTA CERCA" : bearNear ? "⚠ OB BAJISTA CERCA" : bullFNear ? "⚠ FVG ALCISTA CERCA" : bearFNear ? "⚠ FVG BAJISTA CERCA" : "—") + (showZoneStrength and (bullIn or bearIn or bullNear or bearNear) and curZoneStrength != "" ? " | " + curZoneStrength + " (RVOL " + str.tostring(curZoneRVOL, "#.##") + "x)" : "")
@@ -2110,76 +2111,106 @@ if showEntryPanel and barstate.islast
     extAllTxt = not showExt or extPx.size() == 0 ? "—" : "↑ " + extUpTxt + "\n↓ " + extDnTxt
     extAllCol = extUpIdx < 0 and extDnIdx < 0 ? color.gray : color.white
 
-    pctTP = tDir == 1 ? (tpAct - close) / close * 100 : tDir == -1 ? (close - tpAct) / close * 100 : 0.0
-    table.cell(et, 0, 0, "ESTADO", text_color=color.white, text_size=txtSz)
-    table.cell(et, 1, 0, estado + (useMultiTP and tDir != 0 ? " → TP" + str.tostring(tStage) + " (falta " + str.tostring(math.abs(pctTP), "#.##") + "%)" : ""), text_color=estCol, text_size=txtSz)
-    table.cell(et, 0, 1, "Ratio", text_color=color.gray, text_size=txtSz)
-    table.cell(et, 1, 1, str.tostring(rr, "#.#") + ":1" + (rrInput == "Automático" ? " (auto)" : ""), text_color=color.yellow, text_size=txtSz)
-    table.cell(et, 0, 2, "ADX", text_color=color.gray, text_size=txtSz)
-    table.cell(et, 1, 2, str.tostring(adx, "#") + (adxIsWeak ? " (Débil)" : adxIsStrong ? " (Fuerte)" : " (Media)"), text_color=adxIsWeak ? color.gray : adxIsStrong ? color.green : color.orange, text_size=txtSz)
-    table.cell(et, 0, 3, "Zona", text_color=color.gray, text_size=txtSz)
-    table.cell(et, 1, 3, zonaTxt, text_color=zonaCol, text_size=txtSz)
-    table.cell(et, 0, 4, "CTX ADX", text_color=color.gray, text_size=txtSz)
-    table.cell(et, 1, 4, ctxTxt, text_color=ctxCol, text_size=txtSz)
-    table.cell(et, 0, 5, "DI+ / DI−", text_color=color.gray, text_size=txtSz)
-    table.cell(et, 1, 5, diTxt, text_color=diCol, text_size=txtSz)
-    table.cell(et, 0, 6, "DELTA", text_color=color.gray, text_size=txtSz)
-    table.cell(et, 1, 6, deltaTxtP, text_color=deltaColP, text_size=txtSz)
-    table.cell(et, 0, 7, "💧 Liq ↑", text_color=color.gray, text_size=txtSz)
-    table.cell(et, 1, 7, liqHighTxt, text_color=liqHighCol, text_size=txtSz)
-    table.cell(et, 0, 8, "💧 Liq ↓", text_color=color.gray, text_size=txtSz)
-    table.cell(et, 1, 8, liqLowTxt, text_color=liqLowCol, text_size=txtSz)
-    table.cell(et, 0, 9, "🕐 Liq 24h", text_color=color.gray, text_size=txtSz)
-    table.cell(et, 1, 9, liq24Txt, text_color=liq24Col, text_size=txtSz)
-    table.cell(et, 0, 10, "🌊 Liq externa", text_color=color.gray, text_size=txtSz)
-    table.cell(et, 1, 10, extAllTxt, text_color=extAllCol, text_size=txtSz)
-    domTxtP = curZoneStrength == "" ? "Sin OB cerca" : curZoneDom + " · integridad " + str.tostring(curZoneInteg, "#") + "%"
-    domColP = curZoneDom == "COMPRADORES" ? color.green : curZoneDom == "VENDEDORES" ? color.red : color.gray
-    table.cell(et, 0, 11, "Dominancia OB", text_color=color.gray, text_size=txtSz)
-    table.cell(et, 1, 11, domTxtP, text_color=domColP, text_size=txtSz)
-    sessNow = (inAsia ? "Asia " : "") + (inLDN ? "Londres " : "") + (inNYs ? "NY" : "")
     isWeekend = dayofweek(time, tz) == dayofweek.saturday or dayofweek(time, tz) == dayofweek.sunday
-    sessTxtP = isWeekend ? "🌙 FIN DE SEMANA · poca liquidez, ojo con falsas rupturas" : not useSessFilter ? "Filtro OFF" + (sessNow != "" ? " · " + sessNow : " · sin sesión activa") : (sessOK ? "✅ " : "⛔ FUERA · ") + (sessNow != "" ? sessNow : "sin sesión")
-    sessColP = isWeekend ? color.orange : not useSessFilter ? color.gray : sessOK ? color.green : color.orange
-    table.cell(et, 0, 12, "Sesión", text_color=color.gray, text_size=txtSz)
-    table.cell(et, 1, 12, sessTxtP, text_color=sessColP, text_size=txtSz)
-    riskUsd = acctSize * riskPct / 100
-    qtyP = tDir != 0 and tRisk > 0 ? riskUsd / tRisk : na
-    posTxtP = not showPosSize ? "—" : na(qtyP) ? "Riesgo " + str.tostring(riskUsd, "#.##") + " · espera señal" : str.tostring(qtyP, "#.####") + " " + syminfo.basecurrency + " ≈ " + str.tostring(qtyP * tEntry, "#.##") + " " + syminfo.currency + " · riesgo " + str.tostring(riskUsd, "#.##")
-    table.cell(et, 0, 13, "Tamaño posición", text_color=color.gray, text_size=txtSz)
-    table.cell(et, 1, 13, posTxtP, text_color=color.yellow, text_size=txtSz)
-    linkTxtP = not useOscLink ? "OFF (actívalo en ajustes)" : not linkValid ? "⚠ Selecciona las series del oscilador" : "LONG " + str.tostring(srcOscScoreL, "#") + (linkLongOK ? " ✅" : " ⛔") + " · SHORT " + str.tostring(srcOscScoreS, "#") + (linkShortOK ? " ✅" : " ⛔")
-    linkColP = not useOscLink ? color.gray : not linkValid ? color.orange : color.white
-    table.cell(et, 0, 14, "🔗 Oscilador", text_color=color.gray, text_size=txtSz)
-    table.cell(et, 1, 14, linkTxtP, text_color=linkColP, text_size=txtSz)
-    vpTxtP = not showVP ? "OFF" : na(vpPoc) ? "—" : "POC " + f_px(vpPoc) + (close > vpVah ? " · sobre la zona de valor (alcista)" : close > vpPoc ? " · sobre el POC (alcista)" : close >= vpVal ? " · bajo el POC (bajista)" : " · bajo la zona de valor (bajista)")
-    vpColP = not showVP or na(vpPoc) ? color.gray : close > vpPoc ? color.green : color.red
-    table.cell(et, 0, 15, "📊 Perfil volumen", text_color=color.gray, text_size=txtSz)
-    table.cell(et, 1, 15, vpTxtP, text_color=vpColP, text_size=txtSz)
     string asTxt = ""
     color asCol = color.gray
     if bullSig or bearSig
-        asTxt := "✅ SEÑAL " + (bullSig ? "LONG" : "SHORT") + ": entrada " + f_px(tEntry) + " · SL " + f_px(tSL) + " · TP " + f_px(tTP) + " · arriesga solo " + str.tostring(riskPct, "#.##") + "%"
+        asTxt := "✅ SEÑAL " + (bullSig ? "LONG" : "SHORT") + "\nEntrada " + f_px(tEntry) + " · SL " + f_px(tSL) + " · TP " + f_px(tTP)
         asCol := bullSig ? color.green : color.red
     else if tDir != 0
-        asTxt := "📈 Operación " + (tDir == 1 ? "LONG" : "SHORT") + " abierta: respeta el SL " + f_px(tSL) + " y no abras otra"
+        asTxt := "📈 Operación " + (tDir == 1 ? "LONG" : "SHORT") + " abierta\nRespeta el SL " + f_px(tSL) + " y no abras otra"
         asCol := tDir == 1 ? color.green : color.red
     else if bullIn or bullFIn or bearIn or bearFIn
         bool asL = bullIn or bullFIn
         string asWhy = asL ? whyBull : whyBear
-        asTxt := "👀 Precio en zona de " + (asL ? "COMPRA" : "VENTA") + ": todavía NO es señal" + (asWhy != "" ? " · falta: " + asWhy : " · espera la vela de confirmación")
+        asTxt := "👀 En zona de " + (asL ? "COMPRA" : "VENTA") + ": aún no es señal\n" + (asWhy != "" ? "Falta: " + asWhy : "Espera la vela de confirmación")
         asCol := color.yellow
     else if bullNear or bullFNear or bearNear or bearFNear
-        asTxt := "⏳ Se acerca a una zona de " + (bullNear or bullFNear ? "COMPRA" : "VENTA") + ": prepárate, no entres todavía"
+        asTxt := "⏳ Cerca de una zona de " + (bullNear or bullFNear ? "COMPRA" : "VENTA") + "\nPrepárate, no entres todavía"
         asCol := color.orange
     else
-        asTxt := "⏳ Sin zonas cerca: espera, no operes por operar"
+        asTxt := "⏳ Sin zonas cerca\nEspera, no operes por operar"
     if isWeekend
-        asTxt += " · 🌙 fin de semana: menos riesgo"
-    if useOscLink and not linkValid
-        asTxt += " · enlaza el oscilador"
-    table.cell(et, 0, 16, "🤖 Asistente", text_color=color.gray, text_size=txtSz)
-    table.cell(et, 1, 16, showAssist ? asTxt : "OFF", text_color=showAssist ? asCol : color.gray, text_size=txtSz)
+        asTxt += "\n🌙 Fin de semana: menos riesgo"
+
+    int pr = 0
+    table.clear(et, 0, 0, 1, (panelCompact ? 6 : 17) - 1)
+    pctTP = tDir == 1 ? (tpAct - close) / close * 100 : tDir == -1 ? (close - tpAct) / close * 100 : 0.0
+    table.cell(et, 0, pr, "ESTADO", text_color=color.white, text_size=txtSz)
+    table.cell(et, 1, pr, estado + (useMultiTP and tDir != 0 ? " → TP" + str.tostring(tStage) + " (falta " + str.tostring(math.abs(pctTP), "#.##") + "%)" : ""), text_color=estCol, text_size=txtSz)
+    pr += 1
+    if showAssist
+        table.cell(et, 0, pr, "🤖 Asistente", text_color=color.gray, text_size=txtSz)
+        table.cell(et, 1, pr, asTxt, text_color=asCol, text_size=txtSz)
+        pr += 1
+    if not panelCompact
+        table.cell(et, 0, pr, "Ratio", text_color=color.gray, text_size=txtSz)
+        table.cell(et, 1, pr, str.tostring(rr, "#.#") + ":1" + (rrInput == "Automático" ? " (auto)" : ""), text_color=color.yellow, text_size=txtSz)
+        pr += 1
+    if not panelCompact
+        table.cell(et, 0, pr, "ADX", text_color=color.gray, text_size=txtSz)
+        table.cell(et, 1, pr, str.tostring(adx, "#") + (adxIsWeak ? " (Débil)" : adxIsStrong ? " (Fuerte)" : " (Media)"), text_color=adxIsWeak ? color.gray : adxIsStrong ? color.green : color.orange, text_size=txtSz)
+        pr += 1
+    table.cell(et, 0, pr, "Zona", text_color=color.gray, text_size=txtSz)
+    table.cell(et, 1, pr, zonaTxt, text_color=zonaCol, text_size=txtSz)
+    pr += 1
+    if not panelCompact
+        table.cell(et, 0, pr, "CTX ADX", text_color=color.gray, text_size=txtSz)
+        table.cell(et, 1, pr, ctxTxt, text_color=ctxCol, text_size=txtSz)
+        pr += 1
+    if not panelCompact
+        table.cell(et, 0, pr, "DI+ / DI−", text_color=color.gray, text_size=txtSz)
+        table.cell(et, 1, pr, diTxt, text_color=diCol, text_size=txtSz)
+        pr += 1
+    if not panelCompact
+        table.cell(et, 0, pr, "DELTA", text_color=color.gray, text_size=txtSz)
+        table.cell(et, 1, pr, deltaTxtP, text_color=deltaColP, text_size=txtSz)
+        pr += 1
+    if not panelCompact
+        table.cell(et, 0, pr, "💧 Liq ↑", text_color=color.gray, text_size=txtSz)
+        table.cell(et, 1, pr, liqHighTxt, text_color=liqHighCol, text_size=txtSz)
+        pr += 1
+    if not panelCompact
+        table.cell(et, 0, pr, "💧 Liq ↓", text_color=color.gray, text_size=txtSz)
+        table.cell(et, 1, pr, liqLowTxt, text_color=liqLowCol, text_size=txtSz)
+        pr += 1
+    if not panelCompact
+        table.cell(et, 0, pr, "🕐 Liq 24h", text_color=color.gray, text_size=txtSz)
+        table.cell(et, 1, pr, liq24Txt, text_color=liq24Col, text_size=txtSz)
+        pr += 1
+    if not panelCompact
+        table.cell(et, 0, pr, "🌊 Liq externa", text_color=color.gray, text_size=txtSz)
+        table.cell(et, 1, pr, extAllTxt, text_color=extAllCol, text_size=txtSz)
+        pr += 1
+    domTxtP = curZoneStrength == "" ? "Sin OB cerca" : curZoneDom + " · integridad " + str.tostring(curZoneInteg, "#") + "%"
+    domColP = curZoneDom == "COMPRADORES" ? color.green : curZoneDom == "VENDEDORES" ? color.red : color.gray
+    if not panelCompact
+        table.cell(et, 0, pr, "Dominancia OB", text_color=color.gray, text_size=txtSz)
+        table.cell(et, 1, pr, domTxtP, text_color=domColP, text_size=txtSz)
+        pr += 1
+    sessNow = (inAsia ? "Asia " : "") + (inLDN ? "Londres " : "") + (inNYs ? "NY" : "")
+    sessTxtP = isWeekend ? "🌙 FIN DE SEMANA · poca liquidez" : not useSessFilter ? "Filtro OFF" + (sessNow != "" ? " · " + sessNow : " · sin sesión activa") : (sessOK ? "✅ " : "⛔ FUERA · ") + (sessNow != "" ? sessNow : "sin sesión")
+    sessColP = isWeekend ? color.orange : not useSessFilter ? color.gray : sessOK ? color.green : color.orange
+    table.cell(et, 0, pr, "Sesión", text_color=color.gray, text_size=txtSz)
+    table.cell(et, 1, pr, sessTxtP, text_color=sessColP, text_size=txtSz)
+    pr += 1
+    riskUsd = acctSize * riskPct / 100
+    qtyP = tDir != 0 and tRisk > 0 ? riskUsd / tRisk : na
+    posTxtP = not showPosSize ? "—" : na(qtyP) ? "Riesgo " + str.tostring(riskUsd, "#.##") + " · espera señal" : str.tostring(qtyP, "#.####") + " " + syminfo.basecurrency + " ≈ " + str.tostring(qtyP * tEntry, "#.##") + " " + syminfo.currency + " · riesgo " + str.tostring(riskUsd, "#.##")
+    if not panelCompact
+        table.cell(et, 0, pr, "Tamaño posición", text_color=color.gray, text_size=txtSz)
+        table.cell(et, 1, pr, posTxtP, text_color=color.yellow, text_size=txtSz)
+        pr += 1
+    linkTxtP = not useOscLink ? "OFF (actívalo en ajustes)" : not linkValid ? "⚠ Selecciona las series del oscilador" : "LONG " + str.tostring(srcOscScoreL, "#") + (linkLongOK ? " ✅" : " ⛔") + " · SHORT " + str.tostring(srcOscScoreS, "#") + (linkShortOK ? " ✅" : " ⛔")
+    linkColP = not useOscLink ? color.gray : not linkValid ? color.orange : color.white
+    table.cell(et, 0, pr, "🔗 Oscilador", text_color=color.gray, text_size=txtSz)
+    table.cell(et, 1, pr, linkTxtP, text_color=linkColP, text_size=txtSz)
+    pr += 1
+    vpTxtP = not showVP ? "OFF" : na(vpPoc) ? "—" : "POC " + f_px(vpPoc) + (close > vpVah ? " · sobre zona de valor ▲" : close > vpPoc ? " · sobre el POC ▲" : close >= vpVal ? " · bajo el POC ▼" : " · bajo zona de valor ▼")
+    vpColP = not showVP or na(vpPoc) ? color.gray : close > vpPoc ? color.green : color.red
+    table.cell(et, 0, pr, "📊 Perfil volumen", text_color=color.gray, text_size=txtSz)
+    table.cell(et, 1, pr, vpTxtP, text_color=vpColP, text_size=txtSz)
+    pr += 1
 
 if showStats and barstate.islast
     var table st = na
