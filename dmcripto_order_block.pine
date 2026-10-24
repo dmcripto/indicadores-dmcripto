@@ -47,7 +47,7 @@ showVP      = input.bool(true, "Mostrar perfil de volumen del último rango (POC
 vpRows      = input.int(24, "Filas del perfil", minval=8, maxval=60, group=grpVP)
 vpMaxBars   = input.int(300, "Máx. velas hacia atrás", minval=30, maxval=480, group=grpVP)
 vpRight     = input.bool(true, "Perfil pegado a las últimas velas (como el VPVR de TradingView)", group=grpVP, tooltip="ON: las barras salen desde el borde derecho de las velas hacia la izquierda, siempre visibles. OFF: salen desde el inicio del rango (pueden quedar fuera de pantalla si el rango es largo).")
-vpWidthBars = input.int(20, "Ancho máximo de las barras pegadas a la derecha (velas)", minval=5, maxval=80, group=grpVP)
+vpWidthBars = input.int(12, "Ancho máximo de las barras pegadas a la derecha (velas)", minval=5, maxval=80, group=grpVP)
 vpWidthPct  = input.int(25, "Ancho máximo de las barras (% del rango en velas)", minval=5, maxval=60, group=grpVP)
 vpVA        = input.int(70, "Zona de valor (% del volumen)", minval=50, maxval=95, group=grpVP)
 vpDelta     = input.bool(true, "Colorear por quién dominó (verde compradores / rojo vendedores)", group=grpVP, tooltip="Aproxima el delta de cada fila con la posición del cierre dentro de cada vela.")
@@ -2062,7 +2062,7 @@ if barstate.islast and showVP and not na(rgStart)
             float vrow = rv.get(r)
             bool inVA = r >= vaLo and r <= vaHi
             float bShare = vrow > 0 ? rbuy.get(r) / vrow : 0.5
-            color cRow = r == pocR ? color.new(color.yellow, 35) : vpDelta ? (bShare >= 0.5 ? color.new(color.teal, inVA ? 50 : 78) : color.new(color.red, inVA ? 50 : 78)) : color.new(color.gray, inVA ? 50 : 78)
+            color cRow = r == pocR ? color.new(color.yellow, 60) : vpDelta ? (bShare >= 0.5 ? color.new(color.teal, inVA ? 68 : 86) : color.new(color.red, inVA ? 68 : 86)) : color.new(color.gray, inVA ? 68 : 86)
             int rowW = math.max(1, math.round(vMax > 0 ? vrow / vMax * (vpRight ? vpWidthBars : wBars) : 0))
             int rowL = vpRight ? bar_index + 1 - rowW : vpStart
             vpBoxes.push(box.new(rowL, vpLo + (r + 1) * vpStep, rowL + rowW, vpLo + r * vpStep, border_width=0, bgcolor=cRow))
@@ -2130,8 +2130,6 @@ if showEntryPanel and barstate.islast
         asCol := color.orange
     else
         asTxt := "⏳ Sin zonas cerca\nEspera, no operes por operar"
-    if isWeekend
-        asTxt += "\n🌙 Fin de semana: menos riesgo"
 
     int pr = 0
     table.clear(et, 0, 0, 1, (panelCompact ? 6 : 17) - 1)
