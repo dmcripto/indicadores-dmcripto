@@ -55,6 +55,7 @@ structKeep  = input.int(8, "Cuántas rupturas de estructura dejar dibujadas (BOS
 showHHLL    = input.bool(true, "Marcar HH / HL / LH / LL en los pivotes", group=grpTidy, tooltip="HH = máximo más alto, HL = mínimo más alto (tendencia alcista); LH = máximo más bajo, LL = mínimo más bajo (tendencia bajista).")
 showPDZ     = input.bool(true, "Zonas Premium (caro) y Discount (barato) del último rango", group=grpTidy, tooltip="Franja roja arriba del rango (zona cara para comprar, buena para vender) y verde abajo (zona barata para comprar).")
 pdZonePct   = input.int(8, "Alto de las zonas Premium/Discount (% del rango)", minval=3, maxval=30, group=grpTidy)
+showAssist = input.bool(true, "🤖 Asistente: mensaje simple de 'qué hacer ahora' en el panel", group=grpTidy, tooltip="Última fila del panel. Usa lo que ya calcula el indicador (zonas, filtros, señal, operación abierta) y lo dice en palabras simples. No es una recomendación de inversión.")
 whyKeep     = input.int(2, "Cuántos avisos ⛔ dejar en el gráfico", minval=0, maxval=20, group=grpTidy, tooltip="Solo se conservan los últimos avisos de 'tocó zona pero no dio señal' para no llenar el gráfico.")
 showInstTag  = input.bool(true, "Marcar OB institucionales con 🐋", group=grpDetect, tooltip="Institucional = la vela origen de la zona tuvo volumen inusual (ballena). Se marca con etiqueta 🐋 y color más vívido.")
 instBorder   = input.bool(true, "Resaltar OB institucionales con color más vívido", group=grpDetect)
@@ -2076,7 +2077,7 @@ if barstate.islast and showVP and not na(rgStart)
 if showEntryPanel and barstate.islast
     var table et = na
     if na(et)
-        et := table.new(posEntry, 2, 16, bgcolor=color.new(color.black, 75), border_width=1, border_color=color.new(color.gray, 60))
+        et := table.new(posEntry, 2, 17, bgcolor=color.new(color.black, 75), border_width=1, border_color=color.new(color.gray, 60))
     estado = tDir == 1 ? "LONG ACTIVO" : tDir == -1 ? "SHORT ACTIVO" : "ESPERANDO SEÑAL"
     estCol = tDir == 1 ? color.green : tDir == -1 ? color.red : color.gray
     zonaTxt = (setupBullA ? "🐋 BALLENA + ZONA LONG = A+" : setupBearA ? "🐋 BALLENA + ZONA SHORT = A+" : bullIn ? "🎯 EN OB ALCISTA" : bearIn ? "🎯 EN OB BAJISTA" : bullFIn ? "🎯 EN FVG ALCISTA" : bearFIn ? "🎯 EN FVG BAJISTA" : bullNear ? "⚠ OB ALCISTA CERCA" : bearNear ? "⚠ OB BAJISTA CERCA" : bullFNear ? "⚠ FVG ALCISTA CERCA" : bearFNear ? "⚠ FVG BAJISTA CERCA" : "—") + (showZoneStrength and (bullIn or bearIn or bullNear or bearNear) and curZoneStrength != "" ? " | " + curZoneStrength + " (RVOL " + str.tostring(curZoneRVOL, "#.##") + "x)" : "")
@@ -2155,6 +2156,30 @@ if showEntryPanel and barstate.islast
     vpColP = not showVP or na(vpPoc) ? color.gray : close > vpPoc ? color.green : color.red
     table.cell(et, 0, 15, "📊 Perfil volumen", text_color=color.gray, text_size=txtSz)
     table.cell(et, 1, 15, vpTxtP, text_color=vpColP, text_size=txtSz)
+    string asTxt = ""
+    color asCol = color.gray
+    if bullSig or bearSig
+        asTxt := "✅ SEÑAL " + (bullSig ? "LONG" : "SHORT") + ": entrada " + f_px(tEntry) + " · SL " + f_px(tSL) + " · TP " + f_px(tTP) + " · arriesga solo " + str.tostring(riskPct, "#.##") + "%"
+        asCol := bullSig ? color.green : color.red
+    else if tDir != 0
+        asTxt := "📈 Operación " + (tDir == 1 ? "LONG" : "SHORT") + " abierta: respeta el SL " + f_px(tSL) + " y no abras otra"
+        asCol := tDir == 1 ? color.green : color.red
+    else if bullIn or bullFIn or bearIn or bearFIn
+        bool asL = bullIn or bullFIn
+        string asWhy = asL ? whyBull : whyBear
+        asTxt := "👀 Precio en zona de " + (asL ? "COMPRA" : "VENTA") + ": todavía NO es señal" + (asWhy != "" ? " · falta: " + asWhy : " · espera la vela de confirmación")
+        asCol := color.yellow
+    else if bullNear or bullFNear or bearNear or bearFNear
+        asTxt := "⏳ Se acerca a una zona de " + (bullNear or bullFNear ? "COMPRA" : "VENTA") + ": prepárate, no entres todavía"
+        asCol := color.orange
+    else
+        asTxt := "⏳ Sin zonas cerca: espera, no operes por operar"
+    if isWeekend
+        asTxt += " · 🌙 fin de semana: menos riesgo"
+    if useOscLink and not linkValid
+        asTxt += " · enlaza el oscilador"
+    table.cell(et, 0, 16, "🤖 Asistente", text_color=color.gray, text_size=txtSz)
+    table.cell(et, 1, 16, showAssist ? asTxt : "OFF", text_color=showAssist ? asCol : color.gray, text_size=txtSz)
 
 if showStats and barstate.islast
     var table st = na
