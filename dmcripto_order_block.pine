@@ -33,13 +33,22 @@ infoLblOffset = input.int(9, "Distancia de la tarjeta lateral a la derecha (vela
 
 // ------------------- ORDEN DEL GRÁFICO (para leer fácil) -------------------
 grpTidy = "🧭 Orden del gráfico"
-cardsSide   = input.bool(true, "Tarjetas de zonas en una columna a la derecha (no tapan las velas)", group=grpTidy, tooltip="ON (recomendado): el texto de cada zona va en una columna a la derecha del precio, ordenado de arriba abajo, y las cajas quedan transparentes para ver las velas. OFF: comportamiento anterior (texto dentro de la caja).")
+cardsSide   = input.bool(true, "Tarjeta con ⓘ dentro de cada zona, a la derecha de las velas", group=grpTidy, tooltip="ON (recomendado): cada zona OB/FVG se prolonga a la derecha y lleva dentro su tarjeta (con el icono ⓘ), sin tapar las velas. Pasa el mouse sobre la tarjeta para ver el análisis completo. OFF: comportamiento anterior.")
 cardSimple  = input.bool(true, "Texto simple en las tarjetas (ZONA DE COMPRA / ZONA DE VENTA)", group=grpTidy, tooltip="ON: 2 líneas con palabras sencillas. OFF: el texto técnico completo (VOL, RVOL, Δ). El detalle completo siempre está al pasar el mouse por la tarjeta.")
 maxSideCards = input.int(4, "Máx. tarjetas visibles (las más cercanas al precio)", minval=1, maxval=10, group=grpTidy, tooltip="Las zonas más lejanas quedan como ⓘ: pasa el mouse para ver su detalle.")
 tidyRight   = input.bool(true, "Ordenar etiquetas de la derecha para que no se encimen", group=grpTidy, tooltip="Separa en vertical las etiquetas de niveles (PDH, PWH, liquidaciones, DESCUENTO/PREMIUM...) y las tarjetas de zonas, cada grupo en su columna.")
 colLevels   = input.int(1, "Columna de niveles y liquidaciones (velas a la derecha)", minval=1, maxval=60, group=grpTidy)
-colCards    = input.int(20, "Columna de tarjetas de zonas (velas a la derecha)", minval=2, maxval=80, group=grpTidy, tooltip="Si las tarjetas se salen de la pantalla, bájalo o mueve el gráfico hacia la izquierda. Si se pisan con las etiquetas de niveles, súbelo.")
+colCards    = input.int(20, "Posición de las tarjetas (velas a la derecha de la última)", minval=2, maxval=80, group=grpTidy, tooltip="Si las tarjetas se salen de la pantalla, bájalo o mueve el gráfico hacia la izquierda. Si se pisan con las etiquetas de niveles, súbelo.")
+cardW       = input.int(28, "Largo de la zona detrás de la tarjeta (velas)", minval=10, maxval=80, group=grpTidy, tooltip="Cuánto se prolonga la caja de la zona a la derecha para que la tarjeta quede dentro de ella.")
+showEqBox   = input.bool(true, "Caja Equilibrio (50% del rango, entre barato y caro)", group=grpTidy, tooltip="Franja gris en el punto medio del último rango: por encima el precio está caro (premium), por debajo barato (descuento).")
 rowGapATR   = input.float(0.3, "Alto de cada línea de texto (x ATR) para separar etiquetas", minval=0.1, maxval=1.0, step=0.05, group=grpTidy, tooltip="Si ves etiquetas pegadas o encimadas, súbelo (0.4, 0.5). Si quedan muy separadas, bájalo.")
+grpVP = "📊 Perfil de volumen (zona con más negociación)"
+showVP      = input.bool(true, "Mostrar perfil de volumen del último rango (POC y zona de valor)", group=grpVP, tooltip="Como el 'Perfil de volumen de rango fijo' de TradingView: reparte el volumen por precio entre el último mínimo y máximo importantes. POC = precio donde más se negoció (el más importante). Precio SOBRE el POC = sesgo alcista; BAJO el POC = bajista. Es una aproximación con las velas del gráfico.")
+vpRows      = input.int(24, "Filas del perfil", minval=8, maxval=60, group=grpVP)
+vpMaxBars   = input.int(300, "Máx. velas hacia atrás", minval=30, maxval=900, group=grpVP)
+vpWidthPct  = input.int(25, "Ancho máximo de las barras (% del rango en velas)", minval=5, maxval=60, group=grpVP)
+vpVA        = input.int(70, "Zona de valor (% del volumen)", minval=50, maxval=95, group=grpVP)
+vpDelta     = input.bool(true, "Colorear por quién dominó (verde compradores / rojo vendedores)", group=grpVP, tooltip="Aproxima el delta de cada fila con la posición del cierre dentro de cada vela.")
 whyKeep     = input.int(3, "Cuántos avisos ⛔ dejar en el gráfico", minval=0, maxval=20, group=grpTidy, tooltip="Solo se conservan los últimos avisos de 'tocó zona pero no dio señal' para no llenar el gráfico.")
 showInstTag  = input.bool(true, "Marcar OB institucionales con 🐋", group=grpDetect, tooltip="Institucional = la vela origen de la zona tuvo volumen inusual (ballena). Se marca con etiqueta 🐋 y color más vívido.")
 instBorder   = input.bool(true, "Resaltar OB institucionales con color más vívido", group=grpDetect)
@@ -213,7 +222,7 @@ showPDH  = input.bool(false, "Mostrar MÁX. ANTERIOR (día previo)", group=grpSe
 showPDL  = input.bool(false, "Mostrar MÍN. ANTERIOR (día previo)", group=grpSess)
 showEQ      = input.bool(false, "Línea Equilibrium (50% del rango)", group=grpSess, tooltip="Mitad del rango actual: arriba = Premium (caro), abajo = Discount (barato). OFF por defecto: la etiqueta PREMIUM/DESCUENTO sigue funcionando aunque ocultes la línea.")
 showRotura  = input.bool(false, "Líneas Rotura Long/Short (gatillos)", group=grpSess, tooltip="Nivel del último pivote: si el precio lo rompe, confirma continuación a favor de esa rotura. Desactivado por defecto para limpieza (se solapa con Máx/Mín MAYOR).")
-showPremDisc = input.bool(true, "Etiqueta Premium/Descuento", group=grpSess)
+showPremDisc = input.bool(false, "Etiqueta Premium/Descuento", group=grpSess, tooltip="OFF por defecto: ocupaba lugar en el gráfico. El estado Premium/Descuento se ve en la caja Equilibrio.")
 
 grpHTF = "🌐 Sesgo HTF"
 requireHTF = input.bool(false, "Exigir sesgo HTF", group=grpHTF)
@@ -1242,9 +1251,12 @@ if fzs.size() > 0
 // tapa las velas) o pegada al precio (se amontonan velas y etiquetas) = tarjeta a la derecha del precio.
 // Las tarjetas laterales se juntan en UNA sola etiqueta (las 2 zonas más cercanas al precio) para no pisarse.
 var array<label> infoLbls = array.new<label>()
+var array<label> cardIcons = array.new<label>()
 if barstate.islast
     while infoLbls.size() > 0
         label.delete(infoLbls.pop())
+    while cardIcons.size() > 0
+        label.delete(cardIcons.pop())
     array<float> zMid = array.new<float>()
     array<float> zRv = array.new<float>()
     array<float> zH = array.new<float>()
@@ -1255,6 +1267,7 @@ if barstate.islast
     array<color> sCol = array.new<color>()
     array<string> sTip = array.new<string>()
     array<string> sTipOne = array.new<string>()
+    array<box> sBx = array.new<box>()
     if obs.size() > 0
         for idx = 0 to obs.size() - 1
             OB zo = obs.get(idx)
@@ -1357,6 +1370,7 @@ if barstate.islast
                     sCol.push(cc)
                     sTip.push(tp)
                     sTipOne.push(tpOne)
+                    sBx.push(bxR)
                 startK := k + 1
     nS = sMid.size()
     if nS > 0 and cardsSide
@@ -1368,8 +1382,12 @@ if barstate.islast
             int qi = dOrd.get(rr)
             if rr < maxSideCards
                 infoLbls.push(label.new(bar_index + colCards, sMid.get(qi), sTx.get(qi), style=label.style_label_left, color=sCol.get(qi), textcolor=color.white, size=size.small, tooltip=showTips ? sTip.get(qi) : ""))
+                cardIcons.push(label.new(bar_index + colCards - 2, sMid.get(qi), "ⓘ", style=label.style_label_left, color=sCol.get(qi), textcolor=color.white, size=size.small, tooltip=showTips ? sTip.get(qi) : ""))
+                if not na(sBx.get(qi))
+                    box.set_right(sBx.get(qi), bar_index + colCards + cardW)
             else if showTips
                 infoLbls.push(label.new(bar_index + colCards, sMid.get(qi), "ⓘ", style=label.style_label_left, color=sCol.get(qi), textcolor=color.white, size=size.small, tooltip=sTip.get(qi)))
+                cardIcons.push(label(na))
     if nS > 0 and not cardsSide
         int i1 = 0
         float d1 = math.abs(sMid.get(0) - close)
@@ -1859,10 +1877,85 @@ posStats = mobileMode ? position.bottom_right : posEnum(stPos)
 
 tpAct = tStage == 2 ? tTP2 : tStage == 3 ? tTP3 : tTP
 
+// ------------------- EQUILIBRIO + PERFIL DE VOLUMEN -------------------
+var box eqBox = na
+if barstate.islast and showEqBox and not na(lPH) and not na(lPL)
+    if not na(eqBox)
+        box.delete(eqBox)
+    float eqBand = math.max(math.abs(lPH - lPL) * 0.03, atr * 0.15)
+    eqBox := box.new(bar_index - 25, eq + eqBand, bar_index + colCards + cardW, eq - eqBand, border_color=color.new(color.gray, 55), bgcolor=color.new(color.gray, 82), text="Equilibrio", text_color=color.new(color.white, 25), text_size=size.small, text_halign=text.align_right, text_valign=text.align_center)
+
+var array<box> vpBoxes = array.new<box>()
+var array<line> vpLines = array.new<line>()
+var label vpPocLbl = na
+var float vpPoc = na
+var float vpVah = na
+var float vpVal = na
+if barstate.islast and showVP and not na(lPHb) and not na(lPLb)
+    while vpBoxes.size() > 0
+        box.delete(vpBoxes.pop())
+    while vpLines.size() > 0
+        line.delete(vpLines.pop())
+    if not na(vpPocLbl)
+        label.delete(vpPocLbl)
+        vpPocLbl := na
+    int vpStart = math.max(math.min(lPHb, lPLb), bar_index - vpMaxBars)
+    int vpN = bar_index - vpStart + 1
+    float vpHi = high
+    float vpLo = low
+    for i = 0 to vpN - 1
+        vpHi := math.max(vpHi, high[i])
+        vpLo := math.min(vpLo, low[i])
+    float vpStep = (vpHi - vpLo) / vpRows
+    if vpN >= 5 and vpStep > 0
+        array<float> rv = array.new_float(vpRows, 0.0)
+        array<float> rbuy = array.new_float(vpRows, 0.0)
+        for i = 0 to vpN - 1
+            float rng = high[i] - low[i]
+            float bf = rng > 0 ? (close[i] - low[i]) / rng : 0.5
+            int r0 = math.max(0, math.min(vpRows - 1, math.floor((low[i] - vpLo) / vpStep)))
+            int r1 = math.max(0, math.min(vpRows - 1, math.floor((high[i] - vpLo) / vpStep)))
+            for r = r0 to r1
+                float rLo = vpLo + r * vpStep
+                float ov = rng > 0 ? math.max(0.0, math.min(high[i], rLo + vpStep) - math.max(low[i], rLo)) / rng : 1.0
+                float vv = nz(volume[i]) * ov
+                rv.set(r, rv.get(r) + vv)
+                rbuy.set(r, rbuy.get(r) + vv * bf)
+        float vTot = rv.sum()
+        float vMax = rv.max()
+        int pocR = rv.indexof(vMax)
+        float acc = vMax
+        int vaLo = pocR
+        int vaHi = pocR
+        while acc < vTot * vpVA / 100 and (vaLo > 0 or vaHi < vpRows - 1)
+            float vPrev = vaLo > 0 ? rv.get(vaLo - 1) : -1.0
+            float vNext = vaHi < vpRows - 1 ? rv.get(vaHi + 1) : -1.0
+            if vNext >= vPrev
+                vaHi += 1
+                acc += vNext
+            else
+                vaLo -= 1
+                acc += vPrev
+        int wBars = math.max(3, math.round(vpN * vpWidthPct / 100))
+        for r = 0 to vpRows - 1
+            float vrow = rv.get(r)
+            bool inVA = r >= vaLo and r <= vaHi
+            float bShare = vrow > 0 ? rbuy.get(r) / vrow : 0.5
+            color cRow = r == pocR ? color.new(color.yellow, 35) : vpDelta ? (bShare >= 0.5 ? color.new(color.teal, inVA ? 50 : 78) : color.new(color.red, inVA ? 50 : 78)) : color.new(color.gray, inVA ? 50 : 78)
+            int rowW = math.max(1, math.round(vMax > 0 ? vrow / vMax * wBars : 0))
+            vpBoxes.push(box.new(vpStart, vpLo + (r + 1) * vpStep, vpStart + rowW, vpLo + r * vpStep, border_width=0, bgcolor=cRow))
+        vpPoc := vpLo + (pocR + 0.5) * vpStep
+        vpVah := vpLo + (vaHi + 1) * vpStep
+        vpVal := vpLo + vaLo * vpStep
+        vpLines.push(line.new(vpStart, vpPoc, bar_index + 1, vpPoc, extend=extend.right, color=color.new(color.yellow, 10), style=line.style_dashed, width=1))
+        vpLines.push(line.new(vpStart, vpVah, bar_index + 1, vpVah, color=color.new(color.gray, 35), style=line.style_dotted, width=1))
+        vpLines.push(line.new(vpStart, vpVal, bar_index + 1, vpVal, color=color.new(color.gray, 35), style=line.style_dotted, width=1))
+        vpPocLbl := label.new(bar_index + 1, vpPoc, "POC " + f_px(vpPoc), style=label.style_label_left, color=color.new(color.yellow, 15), textcolor=color.black, size=lblSize, tooltip="POC: el precio donde más se negoció en el rango. Sobre el POC el mercado está alcista; bajo el POC, bajista. Entre VAL y VAH está la zona de valor (donde se concentró el " + str.tostring(vpVA) + "% del volumen).")
+
 if showEntryPanel and barstate.islast
     var table et = na
     if na(et)
-        et := table.new(posEntry, 2, 15, bgcolor=color.new(color.black, 75), border_width=1, border_color=color.new(color.gray, 60))
+        et := table.new(posEntry, 2, 16, bgcolor=color.new(color.black, 75), border_width=1, border_color=color.new(color.gray, 60))
     estado = tDir == 1 ? "LONG ACTIVO" : tDir == -1 ? "SHORT ACTIVO" : "ESPERANDO SEÑAL"
     estCol = tDir == 1 ? color.green : tDir == -1 ? color.red : color.gray
     zonaTxt = (setupBullA ? "🐋 BALLENA + ZONA LONG = A+" : setupBearA ? "🐋 BALLENA + ZONA SHORT = A+" : bullIn ? "🎯 EN OB ALCISTA" : bearIn ? "🎯 EN OB BAJISTA" : bullFIn ? "🎯 EN FVG ALCISTA" : bearFIn ? "🎯 EN FVG BAJISTA" : bullNear ? "⚠ OB ALCISTA CERCA" : bearNear ? "⚠ OB BAJISTA CERCA" : bullFNear ? "⚠ FVG ALCISTA CERCA" : bearFNear ? "⚠ FVG BAJISTA CERCA" : "—") + (showZoneStrength and (bullIn or bearIn or bullNear or bearNear) and curZoneStrength != "" ? " | " + curZoneStrength + " (RVOL " + str.tostring(curZoneRVOL, "#.##") + "x)" : "")
@@ -1936,6 +2029,10 @@ if showEntryPanel and barstate.islast
     linkColP = not useOscLink ? color.gray : not linkValid ? color.orange : color.white
     table.cell(et, 0, 14, "🔗 Oscilador", text_color=color.gray, text_size=txtSz)
     table.cell(et, 1, 14, linkTxtP, text_color=linkColP, text_size=txtSz)
+    vpTxtP = not showVP ? "OFF" : na(vpPoc) ? "—" : "POC " + f_px(vpPoc) + (close > vpVah ? " · sobre la zona de valor (alcista)" : close > vpPoc ? " · sobre el POC (alcista)" : close >= vpVal ? " · bajo el POC (bajista)" : " · bajo la zona de valor (bajista)")
+    vpColP = not showVP or na(vpPoc) ? color.gray : close > vpPoc ? color.green : color.red
+    table.cell(et, 0, 15, "📊 Perfil volumen", text_color=color.gray, text_size=txtSz)
+    table.cell(et, 1, 15, vpTxtP, text_color=vpColP, text_size=txtSz)
 
 if showStats and barstate.islast
     var table st = na
@@ -1954,7 +2051,7 @@ if showStats and barstate.islast
 // ------------------- ORDEN FINAL DE ETIQUETAS (derecha) -------------------
 // Cada columna se ordena de arriba abajo y se separa en vertical según el alto estimado de su texto,
 // así niveles, liquidaciones y tarjetas no se encimen.
-f_spread(array<label> ls, int xOff) =>
+f_spread(array<label> ls, array<label> comp, int xOff, int compDx) =>
     int n = ls.size()
     if n > 0
         array<float> ys = array.new<float>()
@@ -1970,6 +2067,10 @@ f_spread(array<label> ls, int xOff) =>
             if not na(prevBot) and yy + hh / 2 > prevBot
                 yy := prevBot - hh / 2
             label.set_xy(lbk, bar_index + xOff, yy)
+            if comp.size() == n
+                label lci = comp.get(ord.get(k))
+                if not na(lci)
+                    label.set_xy(lci, bar_index + xOff + compDx, yy)
             prevBot := yy - hh / 2
 
 if barstate.islast and tidyRight
@@ -1983,6 +2084,8 @@ if barstate.islast and tidyRight
         colA.push(pdlT)
     if not na(pdLbl)
         colA.push(pdLbl)
+    if not na(vpPocLbl)
+        colA.push(vpPocLbl)
     if not na(posShortTag)
         colA.push(posShortTag)
     if not na(posLongTag)
@@ -1997,8 +2100,8 @@ if barstate.islast and tidyRight
             LiqLevel ql = liqLow.get(i)
             if not na(ql.lb) and f_near(ql.lvl)
                 colA.push(ql.lb)
-    f_spread(colA, colLevels)
-    f_spread(infoLbls, colCards)
+    f_spread(colA, array.new<label>(), colLevels, 0)
+    f_spread(infoLbls, cardIcons, colCards, -2)
 
 alertcondition(bullSig, "LONG confirmado", "🟢 LONG · {{ticker}} · {{interval}}")
 alertcondition(bearSig, "SHORT confirmado", "🔴 SHORT · {{ticker}} · {{interval}}")
