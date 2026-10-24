@@ -38,8 +38,8 @@ cardSimple  = input.bool(true, "Texto simple en las tarjetas (ZONA DE COMPRA / Z
 maxSideCards = input.int(4, "Máx. tarjetas visibles (las más cercanas al precio)", minval=1, maxval=10, group=grpTidy, tooltip="Las zonas más lejanas quedan como ⓘ: pasa el mouse para ver su detalle.")
 tidyRight   = input.bool(true, "Ordenar etiquetas de la derecha para que no se encimen", group=grpTidy, tooltip="Separa en vertical las etiquetas de niveles (PDH, PWH, liquidaciones...) y las tarjetas de zonas, cada grupo en su columna.")
 colLevels   = input.int(1, "Columna de niveles y liquidaciones (velas a la derecha)", minval=1, maxval=60, group=grpTidy)
-colCards    = input.int(20, "Posición de las tarjetas (velas a la derecha de la última)", minval=2, maxval=80, group=grpTidy, tooltip="Si las tarjetas se salen de la pantalla, bájalo o mueve el gráfico hacia la izquierda. Si se pisan con las etiquetas de niveles, súbelo.")
-cardW       = input.int(12, "Largo de la zona detrás de la tarjeta (velas)", minval=10, maxval=80, group=grpTidy, tooltip="Cuánto se prolonga la caja de la zona a la derecha para que la tarjeta quede dentro de ella.")
+colCards    = input.int(12, "Posición de las tarjetas (velas a la derecha de la última)", minval=2, maxval=80, group=grpTidy, tooltip="Si las tarjetas se salen de la pantalla, bájalo o mueve el gráfico hacia la izquierda. Si se pisan con las etiquetas de niveles, súbelo.")
+cardW       = input.int(6, "Largo de la zona detrás de la tarjeta (velas)", minval=10, maxval=80, group=grpTidy, tooltip="Cuánto se prolonga la caja de la zona a la derecha para que la tarjeta quede dentro de ella.")
 pdReach     = input.int(14, "Largo de Premium / Discount / Equilibrio hacia la derecha (velas)", minval=2, maxval=60, group=grpTidy, tooltip="Hasta dónde llegan las franjas a la derecha de la última vela. Si pasan por debajo del panel y tapan su texto, bájalo.")
 showEqBox   = input.bool(true, "Caja Equilibrio (50% del rango, entre barato y caro)", group=grpTidy, tooltip="Franja gris en el punto medio del último rango: por encima el precio está caro (premium), por debajo barato (descuento).")
 tidyAuto    = input.bool(true, "Separación automática de etiquetas según el zoom del gráfico", group=grpTidy, tooltip="ON (recomendado): calcula cuánto espacio necesita cada etiqueta según lo que ves en pantalla (alto del precio visible), así no se pisan aunque cambies el zoom. OFF: usa el valor fijo de abajo (x ATR).")
@@ -283,6 +283,7 @@ f_volFmt(float v) => v >= 1000000 ? str.tostring(v / 1000000, "#.##") + "M" : v 
 
 f_integ(float maxFill) => math.max(0.0, 100.0 - maxFill)
 f_dom(float d) => d >= domTh ? "COMPRADORES" : d <= -domTh ? "VENDEDORES" : "NEUTRAL"
+f_domShort(float d) => d >= domTh ? "Compradores" : d <= -domTh ? "Vendedores" : "Neutral"
 f_legDelta(int n) =>
     float sd = 0.0
     float sv = 0.0
@@ -1028,8 +1029,8 @@ f_obText(OB o) =>
     l2 = "VOL " + f_volFmt(o.vol) + " " + syminfo.currency + " | RVOL " + str.tostring(o.rvol, "#.##") + "X"
     l3 = "Δ " + (o.delta >= 0 ? "+" : "") + str.tostring(o.delta, "#.#") + "%" + (showDom and not o.breaker ? " | DOM. " + f_dom(o.delta) : "") + " | " + pctMode + " " + str.tostring(f_integ(o.maxFill), "#") + "%"
     string dRow = o.delta >= 0 ? "+" : ""
-    l1s = o.breaker ? ("ZONA ROTA · ahora " + (o.bull ? "RESISTENCIA" : "SOPORTE")) : ((o.swing ? "SWING " : "") + (o.bull ? "ZONA DE COMPRA (OB)" : "ZONA DE VENTA (OB)") + (o.mergeCount > 1 ? " x" + str.tostring(o.mergeCount) : "") + " · " + o.strength)
-    l2s = "Dominan " + f_dom(o.delta) + " (" + dRow + str.tostring(o.delta, "#") + "%) · " + pctMode + " " + str.tostring(f_integ(o.maxFill), "#") + "%"
+    l1s = o.breaker ? ("ZONA ROTA · ahora " + (o.bull ? "RESISTENCIA" : "SOPORTE")) : ((o.swing ? "SWING " : "") + (o.bull ? "ZONA DE COMPRA (OB)" : "ZONA DE VENTA (OB)") + (o.mergeCount > 1 ? " ×" + str.tostring(o.mergeCount) : "") + " · " + o.strength)
+    l2s = (o.delta >= 0 ? "▲ " : "▼ ") + f_domShort(o.delta) + " " + dRow + str.tostring(o.delta, "#") + "% · " + pctMode + " " + str.tostring(f_integ(o.maxFill), "#") + "%"
     cardSimple ? l1s + "\n" + l2s : l1 + "\n" + l2 + "\n" + l3
 
 if bosUp
@@ -1269,8 +1270,8 @@ f_fzText(FZ f) =>
     l2 = "VOL " + f_volFmt(f.vol) + " " + syminfo.currency + " | RVOL " + str.tostring(f.rvol, "#.##") + "X"
     l3 = "Δ " + (f.delta >= 0 ? "+" : "") + str.tostring(f.delta, "#.#") + "%" + (showDom ? " | DOM. " + f_dom(f.delta) : "") + " | " + pctMode + " " + str.tostring(f_integ(f.maxFill), "#") + "%"
     string dRow = f.delta >= 0 ? "+" : ""
-    l1s = "VACÍO DE PRECIO " + (f.bull ? "ALCISTA" : "BAJISTA") + " (FVG) · " + f.strength
-    l2s = "Dominan " + f_dom(f.delta) + " (" + dRow + str.tostring(f.delta, "#") + "%) · " + pctMode + " " + str.tostring(f_integ(f.maxFill), "#") + "%"
+    l1s = "VACÍO " + (f.bull ? "ALCISTA" : "BAJISTA") + " (FVG) · " + f.strength
+    l2s = (f.delta >= 0 ? "▲ " : "▼ ") + f_domShort(f.delta) + " " + dRow + str.tostring(f.delta, "#") + "% · " + pctMode + " " + str.tostring(f_integ(f.maxFill), "#") + "%"
     cardSimple ? l1s + "\n" + l2s : l1 + "\n" + l2 + "\n" + l3
 
 if showFVG and low > high[2]
@@ -1456,7 +1457,7 @@ if barstate.islast
                     hgt := f_fzTopV(rf) - f_fzBotV(rf)
                     midP := (f_fzTopV(rf) + f_fzBotV(rf)) / 2
                 if members > 1
-                    tx := "[" + str.tostring(members) + " zonas] " + tx
+                    tx := "×" + str.tostring(members) + " " + tx
                 if showTips
                     tp := zIsOB.get(bestM) ? f_obTip(obs.get(zIdx.get(bestM))) : f_fzTip(fzs.get(zIdx.get(bestM)))
                     tpOne := zIsOB.get(bestM) ? f_obOne(obs.get(zIdx.get(bestM))) : f_fzOne(fzs.get(zIdx.get(bestM)))
