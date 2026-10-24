@@ -1,0 +1,44 @@
+TÍTULO
+DMCRIPTO ORDER BLOCK V3.0 — Zonas, estructura, liquidez y asistente (SMC)
+
+RESUMEN (una línea)
+Order Blocks y FVG que se recortan al tocarse, estructura BOS/CHoCH, niveles de liquidez, perfil de volumen y un asistente en el panel que te dice qué hacer, en palabras simples.
+
+DESCRIPCIÓN
+DMCRIPTO ORDER BLOCK V3.0 organiza el gráfico para que se entienda a primera vista, incluso si recién empiezas.
+
+QUÉ DIBUJA
+• Zonas de compra y de venta (Order Blocks) y vacíos de precio (FVG). Cada una lleva una tarjeta ⓘ con su fuerza (FUERTE / MODERADO / DÉBIL) y cuánto de la zona sigue sin tocar. Pasa el mouse por la tarjeta para ver el análisis completo.
+• Las zonas se recortan: la parte que el precio ya tocó se borra y queda solo la parte sin tocar. Si la atraviesa por completo, desaparece.
+• Estructura del mercado: BOS, CHoCH, iBOS/iCHoCH y los puntos HH, HL, LH, LL.
+• Niveles previos del día, la semana y el mes (se borran cuando el precio los toca) y liquidaciones estimadas por apalancamiento (⬆💥 Cortos / ⬇💥 Largos).
+• Liquidez 24h: el máximo y el mínimo de las últimas 24 horas que aún no se tocaron.
+• Franjas Premium (caro), Discount (barato) y Equilibrio del último rango.
+• Perfil de volumen del rango actual con POC y zona de valor: sobre el POC el sesgo es alcista, bajo el POC es bajista.
+
+PANEL Y ASISTENTE
+Un panel compacto con Estado, Asistente, Zona, Sesión, Oscilador y Perfil de volumen. La fila 🤖 Asistente resume en palabras simples qué hacer: ✅ señal con entrada, SL y TP, 👀 en zona pero aún sin señal (y qué filtro falta), ⏳ prepárate o espera. Avisa cuando es fin de semana (menos liquidez).
+
+SEÑALES
+LONG / SHORT con entrada, stop loss y take profit calculados. Combina la zona, el oscilador (opcional), la fuerza de la tendencia, el timeframe mayor, la sesión y el contexto. Si una zona se toca pero no hay señal, una etiqueta naranja dice qué falta (✖ falta: oscilador · ADX débil...).
+
+CÓMO USARLO
+1. Añade primero el DMCRIPTO OSCILADOR V3.0 y luego este indicador.
+2. En los ajustes de este indicador, elige las series del oscilador (grupo de enlace).
+3. Espera a que el asistente diga ✅ SEÑAL. Sin señal, no operes.
+4. Respeta siempre el SL y arriesga poco.
+
+CÓMO ORDENARLO A TU GUSTO
+Cada tipo de etiqueta tiene su propio tamaño (o se puede ocultar). Hay un panel compacto y uno completo, y la separación entre etiquetas se ajusta sola según el zoom.
+
+ALERTAS
+Incluye condiciones de alerta (LONG confirmado, SHORT confirmado y otras) y un aviso opcional con datos de la señal. Las alertas de TradingView dependen de tu plan.
+
+AVISO
+Contenido educativo. No es asesoría financiera ni garantía de resultados. Las zonas y las liquidaciones son estimaciones. Opera con gestión de riesgo.
+
+ETIQUETAS SUGERIDAS (tags)
+order block, fvg, smart money, smc, liquidez, estructura de mercado, choch, bos, volume profile, poc, premium discount, trading en español
+
+CATEGORÍA SUGERIDA
+Indicador de tendencia / Soporte y resistencia

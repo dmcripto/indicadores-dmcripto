@@ -1,0 +1,42 @@
+TÍTULO
+DMCRIPTO OSCILADOR V3.0 — Momentum, señales A/B/C y asistente
+
+RESUMEN (una línea)
+Oscilador de momentum con señales LONG/SHORT con grado A/B/C, divergencias, directrices y un asistente que explica qué hacer; se conecta con DMCRIPTO ORDER BLOCK V3.0.
+
+DESCRIPCIÓN
+DMCRIPTO OSCILADOR V3.0 mide la fuerza del movimiento y confirma o descarta las señales del Order Block. Está pensado para entenderse a primera vista.
+
+QUÉ MUESTRA
+• Línea de momentum de 0 a 100 con su media, y zonas de sobrecompra y sobreventa (ajustables).
+• Señales LONG / SHORT con grado A, B o C y puntaje (A es la mejor). Incluye filtros para evitar señales tardías.
+• 🔄 Agotamiento: cuando el precio pasa mucho tiempo en sobreventa o sobrecompra y empieza a salir.
+• Directrices del oscilador (↗ Soporte alcista / ↘ Resistencia bajista) y avisos cuando se rompen (⬇ Rompió soporte / ⬆ Rompió resistencia).
+• Divergencias alcistas y bajistas (Div ↑ / Div ↓).
+• ADX con su etiqueta Débil / Media / Fuerte, para saber si hay tendencia.
+
+PANEL Y ASISTENTE
+Panel compacto con momentum y zona, dirección, último cambio, semáforo (🟢 busca LONG, 🔴 busca SHORT, 🟡 espera), puntaje, divergencia y timeframe mayor. La fila 🤖 Asistente lo traduce a una frase: "Busca una zona de COMPRA en el Order Block", "Sobrecompra: no compres aquí", "Sin señal, espera".
+
+CÓMO SE CONECTA CON EL ORDER BLOCK
+El Order Block marca dónde (las zonas) y el oscilador confirma cuándo (el momentum a favor). Una señal es más fuerte cuando el precio está en una zona y el oscilador está de acuerdo. Se enlazan eligiendo las series del oscilador en los ajustes del Order Block.
+
+CÓMO USARLO
+1. Añade este oscilador al gráfico.
+2. Añade DMCRIPTO ORDER BLOCK V3.0 y elige las series del oscilador en sus ajustes.
+3. Lee el 🤖 Asistente del panel. Pasa el mouse por cada etiqueta: explica qué significa.
+
+PERSONALIZACIÓN
+Tamaño de cada tipo de etiqueta (u ocultarla), tamaño del panel y modo móvil.
+
+ALERTAS
+Condiciones de alerta para señales, agotamiento, roturas de directriz, semáforo y divergencias. Las alertas de TradingView dependen de tu plan.
+
+AVISO
+Contenido educativo. No es asesoría financiera ni garantía de resultados. Ningún indicador acierta siempre. Opera con gestión de riesgo.
+
+ETIQUETAS SUGERIDAS (tags)
+oscilador, momentum, rsi, estocástico, divergencia, adx, sobrecompra, sobreventa, señales, trading en español
+
+CATEGORÍA SUGERIDA
+Oscilador
