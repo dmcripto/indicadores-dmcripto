@@ -56,6 +56,7 @@ vpVA        = input.int(70, "Zona de valor (% del volumen)", minval=50, maxval=9
 vpDelta     = input.bool(true, "Colorear por quién dominó (verde compradores / rojo vendedores)", group=grpVP, tooltip="Aproxima el delta de cada fila con la posición del cierre dentro de cada vela.")
 structKeep  = input.int(6, "Cuántas rupturas de estructura dejar dibujadas (BOS/CHoCH/iBOS/iCHoCH)", minval=2, maxval=30, group=grpTidy, tooltip="Solo se conservan las últimas para no llenar el gráfico.")
 lvlLineBack = input.int(30, "Líneas de niveles: cuántas velas hacia atrás se dibujan (terminan en su etiqueta)", minval=0, maxval=200, group=grpTidy, tooltip="Las líneas punteadas de niveles (PDH, PWH, liquidaciones...) ya no cruzan todo el gráfico hasta el precio: empiezan unas velas atrás y terminan en su etiqueta. 0 = solo desde la última vela.")
+shrinkMit   = input.bool(true, "Recortar cada zona OB/FVG: se borra la parte ya tocada y queda la que no", group=grpTidy, tooltip="Si el precio entró 20% en una zona, ese 20% se borra y queda dibujado el 80% restante. Cuando se toca por completo, la zona desaparece. Apágalo para ver siempre la zona entera.")
 hideMitPrev = input.bool(true, "Borrar niveles previos (máx./mín. de ayer, semana, mes) cuando el precio ya los tocó", group=grpTidy, tooltip="Un nivel tocado ya no es liquidez pendiente: su etiqueta y su línea desaparecen para no llenar el gráfico. Apágalo si quieres ver siempre todos.")
 showHHLL    = input.bool(true, "Marcar HH / HL / LH / LL en los pivotes", group=grpTidy, tooltip="HH = máximo más alto, HL = mínimo más alto (tendencia alcista); LH = máximo más bajo, LL = mínimo más bajo (tendencia bajista).")
 showPDZ     = input.bool(true, "Zonas Premium (caro) y Discount (barato) del último rango", group=grpTidy, tooltip="Franja roja arriba del rango (zona cara para comprar, buena para vender) y verde abajo (zona barata para comprar).")
@@ -957,6 +958,12 @@ type FZ
 
 var array<FZ> fzs = array.new<FZ>()
 
+// Parte de la zona que sigue sin tocar (recorta lo ya consumido por el precio)
+f_obTopV(OB o) => (not shrinkMit or o.breaker or not o.bull) ? o.top : o.top - o.maxFill / 100 * (o.top - o.bot)
+f_obBotV(OB o) => (not shrinkMit or o.breaker or o.bull) ? o.bot : o.bot + o.maxFill / 100 * (o.top - o.bot)
+f_fzTopV(FZ f) => (not shrinkMit or not f.bull) ? f.top : f.top - f.maxFill / 100 * (f.top - f.bot)
+f_fzBotV(FZ f) => (not shrinkMit or f.bull) ? f.bot : f.bot + f.maxFill / 100 * (f.top - f.bot)
+
 f_clamp100(float x) => math.max(0.0, math.min(100.0, x))
 
 f_legDisp(int n, bool bull) =>
@@ -1199,6 +1206,11 @@ while iOB >= 0
                 o.maxFill := math.max(o.maxFill, curFill)
             if scoreStrength
                 o.strength := f_obStrengthTxt(o)
+            if shrinkMit and not fullyFilled and not na(o.bx)
+                if o.bull
+                    box.set_top(o.bx, f_obTopV(o))
+                else
+                    box.set_bottom(o.bx, f_obBotV(o))
         if extendUntilMit and not fullyFilled and not (o.breaker and o.mit) and not na(o.bx)
             box.set_right(o.bx, bar_index + 1)
     iOB -= 1
@@ -1314,6 +1326,11 @@ while j >= 0
     if not f.mit and not na(f.bx)
         curFillF = f.bull ? (low <= f.top ? math.max(0.0, math.min(100.0, (f.top - low) / (f.top - f.bot) * 100)) : 0.0) : (high >= f.bot ? math.max(0.0, math.min(100.0, (high - f.bot) / (f.top - f.bot) * 100)) : 0.0)
         f.maxFill := math.max(f.maxFill, curFillF)
+        if shrinkMit
+            if f.bull
+                box.set_top(f.bx, f_fzTopV(f))
+            else
+                box.set_bottom(f.bx, f_fzBotV(f))
     j -= 1
 
 while fzs.size() > maxFZs
@@ -1377,9 +1394,9 @@ if barstate.islast
                     box.set_border_color(zo.bx, zo.swing ? color.new(zo.bull ? color.green : color.red, 25) : color.new(color.gray, 100))
                     box.set_border_width(zo.bx, zo.swing ? 2 : 0)
                 if not (zo.breaker ? (zo.bull ? close >= zo.top : close <= zo.bot) : (zo.bull ? close <= zo.bot : close >= zo.top))
-                    zMid.push((zo.top + zo.bot) / 2)
+                    zMid.push((f_obTopV(zo) + f_obBotV(zo)) / 2)
                     zRv.push(zo.rvol + 1000.0)
-                    zH.push(zo.top - zo.bot)
+                    zH.push(f_obTopV(zo) - f_obBotV(zo))
                     zIsOB.push(true)
                     zIdx.push(idx)
     if fzs.size() > 0
@@ -1393,9 +1410,9 @@ if barstate.islast
                 box.set_text_valign(zf.bx, text.align_center)
                 box.set_bgcolor(zf.bx, showZoneInfoBox ? f_strengthCol(zf.strength, zf.bull, 93) : (zf.bull ? fvgBullCol : fvgBearCol))
                 if not zf.mit
-                    zMid.push((zf.top + zf.bot) / 2)
+                    zMid.push((f_fzTopV(zf) + f_fzBotV(zf)) / 2)
                     zRv.push(zf.rvol)
-                    zH.push(zf.top - zf.bot)
+                    zH.push(f_fzTopV(zf) - f_fzBotV(zf))
                     zIsOB.push(false)
                     zIdx.push(idx)
     nZ = zMid.size()
@@ -1429,15 +1446,15 @@ if barstate.islast
                     tx := f_obText(ro)
                     cc := ro.breaker ? color.new(ro.bull ? color.blue : color.purple, 10) : f_strengthCol(ro.strength, ro.bull, 10)
                     bxR := ro.bx
-                    hgt := ro.top - ro.bot
-                    midP := (ro.top + ro.bot) / 2
+                    hgt := f_obTopV(ro) - f_obBotV(ro)
+                    midP := (f_obTopV(ro) + f_obBotV(ro)) / 2
                 else
                     FZ rf = fzs.get(zIdx.get(bestM))
                     tx := f_fzText(rf)
                     cc := f_strengthCol(rf.strength, rf.bull, 10)
                     bxR := rf.bx
-                    hgt := rf.top - rf.bot
-                    midP := (rf.top + rf.bot) / 2
+                    hgt := f_fzTopV(rf) - f_fzBotV(rf)
+                    midP := (f_fzTopV(rf) + f_fzBotV(rf)) / 2
                 if members > 1
                     tx := "[" + str.tostring(members) + " zonas] " + tx
                 if showTips
