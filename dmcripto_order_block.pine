@@ -43,7 +43,7 @@ cardW       = input.int(28, "Largo de la zona detrás de la tarjeta (velas)", mi
 showEqBox   = input.bool(true, "Caja Equilibrio (50% del rango, entre barato y caro)", group=grpTidy, tooltip="Franja gris en el punto medio del último rango: por encima el precio está caro (premium), por debajo barato (descuento).")
 rowGapATR   = input.float(0.3, "Alto de cada línea de texto (x ATR) para separar etiquetas", minval=0.1, maxval=1.0, step=0.05, group=grpTidy, tooltip="Si ves etiquetas pegadas o encimadas, súbelo (0.4, 0.5). Si quedan muy separadas, bájalo.")
 grpVP = "📊 Perfil de volumen (zona con más negociación)"
-showVP      = input.bool(true, "Mostrar perfil de volumen del último rango (POC y zona de valor)", group=grpVP, tooltip="Como el 'Perfil de volumen de rango fijo' de TradingView: reparte el volumen por precio entre el último mínimo y máximo importantes. POC = precio donde más se negoció (el más importante). Precio SOBRE el POC = sesgo alcista; BAJO el POC = bajista. Es una aproximación con las velas del gráfico.")
+showVP      = input.bool(true, "Mostrar perfil de volumen del último rango (POC y zona de valor)", group=grpVP, tooltip="Como el 'Perfil de volumen de rango fijo' de TradingView: reparte el volumen por precio según el fractal: si la tendencia es alcista, desde el mínimo fuerte (inicio del descuento) hasta el precio actual; si es bajista, desde el máximo fuerte (inicio del premium). POC = precio donde más se negoció (el más importante). Precio SOBRE el POC = sesgo alcista; BAJO el POC = bajista. Es una aproximación con las velas del gráfico.")
 vpRows      = input.int(24, "Filas del perfil", minval=8, maxval=60, group=grpVP)
 vpMaxBars   = input.int(300, "Máx. velas hacia atrás", minval=30, maxval=900, group=grpVP)
 vpWidthPct  = input.int(25, "Ancho máximo de las barras (% del rango en velas)", minval=5, maxval=60, group=grpVP)
@@ -1899,7 +1899,12 @@ if barstate.islast and showVP and not na(lPHb) and not na(lPLb)
     if not na(vpPocLbl)
         label.delete(vpPocLbl)
         vpPocLbl := na
-    int vpStart = math.max(math.min(lPHb, lPLb), bar_index - vpMaxBars)
+    // Rango según el fractal: tendencia alcista = desde el mínimo fuerte (inicio del descuento) hasta el precio actual;
+    // bajista = desde el máximo fuerte (inicio del premium). Si el tramo es muy corto, usa el pivote más antiguo.
+    int vpAnchor = trendUp ? lPLb : lPHb
+    if bar_index - vpAnchor < 5
+        vpAnchor := math.min(lPHb, lPLb)
+    int vpStart = math.max(vpAnchor, bar_index - vpMaxBars)
     int vpN = bar_index - vpStart + 1
     float vpHi = high
     float vpLo = low
