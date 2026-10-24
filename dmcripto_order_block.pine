@@ -173,6 +173,7 @@ szLiq    = input.string("Pequeño", "Liquidaciones (LIQ LARGOS / CORTOS)", optio
 szPoc    = input.string("Pequeño", "POC (perfil de volumen)", options=["Oculto", "Muy pequeño", "Pequeño", "Normal", "Grande"], group=grpSz)
 szCard   = input.string("Pequeño", "Tarjetas de zonas OB / FVG ('Oculto' deja solo el icono ⓘ)", options=["Oculto", "Muy pequeño", "Pequeño", "Normal", "Grande"], group=grpSz)
 szStruct = input.string("Pequeño", "Estructura BOS / CHoCH", options=["Oculto", "Muy pequeño", "Pequeño", "Normal", "Grande"], group=grpSz)
+szWhy    = input.string("Pequeño", "Avisos «tocó zona pero no es señal» (✖ falta: ...)", options=["Oculto", "Muy pequeño", "Pequeño", "Normal", "Grande"], group=grpSz, tooltip="Naranja con texto negro para que se lea bien. Dice en palabras simples qué filtro falta. Pasa el mouse para ver el detalle.")
 szPos    = input.string("Muy pequeño", "POSIBLE LONG / SHORT", options=["Oculto", "Muy pequeño", "Pequeño", "Normal", "Grande"], group=grpSz)
 lblShort = input.bool(true, "Texto corto en liquidaciones (sin '~' ni 'est.')", group=grpSz)
 
@@ -1623,18 +1624,47 @@ linkShortOK = not linkActive or (srcOscScoreS >= minLinkScore and (not requireOs
 bullSig = tDir == 0 and bullTouch and (not useCombined or linkActive or oscOS) and exhBullOK and adxOK and htfBullOK and ctxLongOK and sweepOKBull and sessOK and linkLongOK
 bearSig = tDir == 0 and bearTouch and (not useCombined or linkActive or oscOB) and exhBearOK and adxOK and htfBearOK and ctxShortOK and sweepOKBear and sessOK and linkShortOK
 
+// Texto simple de los filtros que faltan (máx. 3 motivos)
+f_whyTxt(bool op, bool osc, bool exh, bool adx, bool htf, bool ctx, bool swp, bool ses, bool lnk) =>
+    array<string> r = array.new<string>()
+    if op
+        r.push("ya hay operación abierta")
+    if osc
+        r.push("el oscilador no confirma")
+    if exh
+        r.push("sin agotamiento")
+    if adx
+        r.push("tendencia débil (ADX)")
+    if htf
+        r.push("timeframe mayor en contra")
+    if ctx
+        r.push("contexto en contra")
+    if swp
+        r.push("falta barrido de liquidez")
+    if ses
+        r.push("fuera de sesión")
+    if lnk
+        r.push("puntaje del oscilador bajo")
+    int nr = r.size()
+    string out = ""
+    for i = 0 to math.min(nr, 3) - 1
+        out += (i > 0 ? " · " : "") + r.get(i)
+    if nr > 3
+        out += " +" + str.tostring(nr - 3)
+    out
+
 // Por qué una zona tocada no dio señal
 string whyBull = ""
 string whyBear = ""
 if showWhy and bullTouch and not bullSig
-    whyBull := (tDir != 0 ? "operación-abierta " : "") + (useCombined and not linkActive and not oscOS ? "oscilador " : "") + (not exhBullOK ? "agotamiento " : "") + (not adxOK ? "ADX " : "") + (not htfBullOK ? "sesgo-HTF " : "") + (not ctxLongOK ? "contexto " : "") + (not sweepOKBull ? "barrido " : "") + (not sessOK ? "sesión " : "") + (not linkLongOK ? "puntaje-osc " : "")
+    whyBull := f_whyTxt(tDir != 0, useCombined and not linkActive and not oscOS, not exhBullOK, not adxOK, not htfBullOK, not ctxLongOK, not sweepOKBull, not sessOK, not linkLongOK)
 if showWhy and bearTouch and not bearSig
-    whyBear := (tDir != 0 ? "operación-abierta " : "") + (useCombined and not linkActive and not oscOB ? "oscilador " : "") + (not exhBearOK ? "agotamiento " : "") + (not adxOK ? "ADX " : "") + (not htfBearOK ? "sesgo-HTF " : "") + (not ctxShortOK ? "contexto " : "") + (not sweepOKBear ? "barrido " : "") + (not sessOK ? "sesión " : "") + (not linkShortOK ? "puntaje-osc " : "")
+    whyBear := f_whyTxt(tDir != 0, useCombined and not linkActive and not oscOB, not exhBearOK, not adxOK, not htfBearOK, not ctxShortOK, not sweepOKBear, not sessOK, not linkShortOK)
 var array<label> whyLbls = array.new<label>()
-if whyBull != ""
-    whyLbls.push(label.new(bar_index, low, "LONG ⛔ " + whyBull, style=label.style_label_up, color=color.new(color.gray, 25), textcolor=color.white, size=size.tiny, tooltip="Tocó una zona de compra pero NO es señal todavía. Falta cumplir: " + whyBull))
-if whyBear != ""
-    whyLbls.push(label.new(bar_index, high, "SHORT ⛔ " + whyBear, style=label.style_label_down, color=color.new(color.gray, 25), textcolor=color.white, size=size.tiny, tooltip="Tocó una zona de venta pero NO es señal todavía. Falta cumplir: " + whyBear))
+if whyBull != "" and szWhy != "Oculto"
+    whyLbls.push(label.new(bar_index, low - atr * 0.5, "LONG ✖ falta: " + whyBull, style=label.style_label_up, color=color.new(color.orange, 10), textcolor=color.black, size=f_sz(szWhy), tooltip="Tocó una zona de compra pero NO es señal todavía. Falta cumplir: " + whyBull))
+if whyBear != "" and szWhy != "Oculto"
+    whyLbls.push(label.new(bar_index, high + atr * 0.5, "SHORT ✖ falta: " + whyBear, style=label.style_label_down, color=color.new(color.orange, 10), textcolor=color.black, size=f_sz(szWhy), tooltip="Tocó una zona de venta pero NO es señal todavía. Falta cumplir: " + whyBear))
 while whyLbls.size() > whyKeep
     label.delete(whyLbls.shift())
 
