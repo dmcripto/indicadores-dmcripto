@@ -185,7 +185,7 @@ lblShort = input.bool(true, "Texto corto en liquidaciones (sin '~' ni 'est.')", 
 lblIcons = input.bool(true, "Etiquetas con iconos y palabras simples (en vez de siglas PDH / PWH / LIQ / POC)", group=grpSz, tooltip="ON: 📅 Máx. de ayer, 📆 Mín. semana, ⬆💥 Cortos 25x (liquidación de cortos), 🎯 POC... y al pasar el mouse sobre la etiqueta se explica qué significa. OFF: siglas técnicas.")
 
 f_sz(string s) => s == "Muy pequeño" ? size.tiny : s == "Pequeño" ? size.small : s == "Normal" ? size.normal : size.large
-f_hf(string s) => s == "Muy pequeño" ? 0.7 : s == "Pequeño" ? 1.0 : s == "Normal" ? 1.35 : 1.8
+f_hf(string s) => s == "Muy pequeño" ? 0.85 : s == "Pequeño" ? 1.0 : s == "Normal" ? 1.35 : 1.8
 
 grpOsc = "🔗 Oscilador (IGUAL que en el OSCILADOR V3.0)"
 rsiLenConf   = input.int(14, "RSI", group=grpOsc)
@@ -647,9 +647,9 @@ if barstate.islast
     if not na(l24_lb)
         label.delete(l24_lb)
         l24_lb := na
-    if showLiq24 and szLiq != "Oculto" and f_near(h24p) and not h24Swept and not na(h24p)
+    if showLiq24 and szLiq != "Oculto" and not h24Swept and not na(h24p)
         h24_lb := label.new(bar_index + colLevels, h24p, (lblIcons ? "🕐 Máx. 24h " : "LIQ 24h ↑ ") + f_px(h24p), style=label.style_label_left, color=color.new(liq24Col, 15), textcolor=color.white, size=f_sz(szLiq), tooltip="Liquidez 24h: el MÁXIMO de las últimas 24 horas que todavía no fue tocado. Ahí hay stops acumulados y el precio suele ir a 'barrerlo'. Solo es informativo.")
-    if showLiq24 and szLiq != "Oculto" and f_near(l24p) and not l24Swept and not na(l24p)
+    if showLiq24 and szLiq != "Oculto" and not l24Swept and not na(l24p)
         l24_lb := label.new(bar_index + colLevels, l24p, (lblIcons ? "🕐 Mín. 24h " : "LIQ 24h ↓ ") + f_px(l24p), style=label.style_label_left, color=color.new(liq24Col, 15), textcolor=color.white, size=f_sz(szLiq), tooltip="Liquidez 24h: el MÍNIMO de las últimas 24 horas que todavía no fue tocado. Ahí hay stops acumulados y el precio suele ir a 'barrerlo'. Solo es informativo.")
 
 float nearHigh = na
