@@ -39,7 +39,7 @@ maxSideCards = input.int(4, "Máx. tarjetas visibles (las más cercanas al preci
 tidyRight   = input.bool(true, "Ordenar etiquetas de la derecha para que no se encimen", group=grpTidy, tooltip="Separa en vertical las etiquetas de niveles (PDH, PWH, liquidaciones...) y las tarjetas de zonas, cada grupo en su columna.")
 colLevels   = input.int(1, "Columna de niveles y liquidaciones (velas a la derecha)", minval=1, maxval=60, group=grpTidy)
 colCards    = input.int(20, "Posición de las tarjetas (velas a la derecha de la última)", minval=2, maxval=80, group=grpTidy, tooltip="Si las tarjetas se salen de la pantalla, bájalo o mueve el gráfico hacia la izquierda. Si se pisan con las etiquetas de niveles, súbelo.")
-cardW       = input.int(28, "Largo de la zona detrás de la tarjeta (velas)", minval=10, maxval=80, group=grpTidy, tooltip="Cuánto se prolonga la caja de la zona a la derecha para que la tarjeta quede dentro de ella.")
+cardW       = input.int(12, "Largo de la zona detrás de la tarjeta (velas)", minval=10, maxval=80, group=grpTidy, tooltip="Cuánto se prolonga la caja de la zona a la derecha para que la tarjeta quede dentro de ella.")
 showEqBox   = input.bool(true, "Caja Equilibrio (50% del rango, entre barato y caro)", group=grpTidy, tooltip="Franja gris en el punto medio del último rango: por encima el precio está caro (premium), por debajo barato (descuento).")
 rowGapATR   = input.float(0.4, "Alto de cada línea de texto (x ATR) para separar etiquetas", minval=0.1, maxval=1.0, step=0.05, group=grpTidy, tooltip="Si ves etiquetas pegadas o encimadas, súbelo (0.4, 0.5). Si quedan muy separadas, bájalo.")
 grpVP = "📊 Perfil de volumen (zona con más negociación)"
