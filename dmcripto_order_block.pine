@@ -2024,6 +2024,7 @@ tpAct = tStage == 2 ? tTP2 : tStage == 3 ? tTP3 : tTP
 var float rgHi = na
 var float rgLo = na
 var int rgStart = na
+var int rgView = na
 var bool rgUp = true
 if barstate.islast
     bool bigOk = not na(lPHBigb) and not na(lPLBigb)
@@ -2032,6 +2033,13 @@ if barstate.islast
     if bar_index - aB < 5
         aB := bigOk ? math.min(lPHBigb, lPLBigb) : math.min(nz(lPHb, bar_index), nz(lPLb, bar_index))
     rgStart := math.max(aB, bar_index - 480)
+    // Borde izquierdo de lo que se ve en pantalla: los textos centrados de las franjas quedan siempre a la vista
+    int visN = 0
+    for i = 0 to math.min(bar_index, 480)
+        if time[i] < chart.left_visible_bar_time
+            break
+        visN := i
+    rgView := math.max(rgStart, bar_index - visN)
     rgHi := high
     rgLo := low
     for i = 0 to bar_index - rgStart
@@ -2044,7 +2052,7 @@ if barstate.islast and showEqBox and not na(rgHi) and rgHi > rgLo
         box.delete(eqBox)
     float rgEq = (rgHi + rgLo) / 2
     float eqBand = math.max((rgHi - rgLo) * 0.03, atr * 0.15)
-    eqBox := box.new(rgStart, rgEq + eqBand, bar_index + pdReach, rgEq - eqBand, border_color=color.new(color.gray, 55), bgcolor=color.new(color.gray, 82), text="Equilibrio", text_color=color.new(color.white, 25), text_size=size.small, text_halign=text.align_right, text_valign=text.align_center)
+    eqBox := box.new(rgView, rgEq + eqBand, bar_index + pdReach, rgEq - eqBand, border_color=color.new(color.gray, 55), bgcolor=color.new(color.gray, 82), text="Equilibrio", text_color=color.new(color.white, 25), text_size=size.small, text_halign=text.align_right, text_valign=text.align_center)
 
 var box pzBox = na
 var box dzBox = na
@@ -2055,8 +2063,8 @@ if barstate.islast and showPDZ and not na(rgHi) and rgHi > rgLo
         box.delete(dzBox)
     float pdZ = (rgHi - rgLo) * pdZonePct / 100
     int pdR = bar_index + pdReach
-    pzBox := box.new(rgStart, rgHi, pdR, rgHi - pdZ, border_color=color.new(color.red, 55), bgcolor=color.new(color.red, 88), text="Premium (caro)", text_color=color.new(color.white, 5), text_size=size.small, text_halign=text.align_center, text_valign=text.align_bottom)
-    dzBox := box.new(rgStart, rgLo + pdZ, pdR, rgLo, border_color=color.new(color.green, 55), bgcolor=color.new(color.green, 88), text="Discount (barato)", text_color=color.new(color.white, 5), text_size=size.small, text_halign=text.align_center, text_valign=text.align_top)
+    pzBox := box.new(rgView, rgHi, pdR, rgHi - pdZ, border_color=color.new(color.red, 55), bgcolor=color.new(color.red, 88), text="Premium (caro)", text_color=color.new(color.white, 5), text_size=size.small, text_halign=text.align_center, text_valign=text.align_bottom)
+    dzBox := box.new(rgView, rgLo + pdZ, pdR, rgLo, border_color=color.new(color.green, 55), bgcolor=color.new(color.green, 88), text="Discount (barato)", text_color=color.new(color.white, 5), text_size=size.small, text_halign=text.align_center, text_valign=text.align_top)
 
 var array<box> vpBoxes = array.new<box>()
 var array<line> vpLines = array.new<line>()
