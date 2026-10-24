@@ -8,7 +8,7 @@ mobileMode = input.bool(false, "Modo Móvil (adaptar tamaños y carga)", group=g
 // ------------------- LIMPIEZA -------------------
 grpClean = "🧹 Limpieza Visual"
 masterClean   = input.bool(true, "Modo gráfico limpio", group=grpClean)
-showBOSLabels = input.bool(false, "Mostrar etiquetas BOS/CHoCH", group=grpClean)
+showBOSLabels = input.bool(true, "Mostrar estructura BOS/CHoCH (línea + texto)", group=grpClean, tooltip="BOS = el precio rompe un máximo/mínimo y sigue la tendencia. CHoCH = cambio de tendencia (la primera ruptura en contra). Se dibuja como una línea desde el pivote roto hasta la vela de ruptura, con el texto en el medio.")
 delBreakers   = input.bool(true, "Borrar breakers después de tocados", group=grpClean, tooltip="Cuando un breaker (OB roto) es tocado, se elimina del gráfico en lugar de quedarse para siempre.")
 showWhales    = input.bool(true, "Colorear velas ballena (volumen inusual)", group=grpClean, tooltip="Pinta la vela de amarillo fluor si el volumen inusual es alcista, o fucsia si es bajista. Sin triángulos ni etiquetas.")
 whaleLen      = input.int(20, "Período promedio de volumen (ballenas)", minval=5, maxval=100, group=grpClean)
@@ -45,10 +45,14 @@ rowGapATR   = input.float(0.3, "Alto de cada línea de texto (x ATR) para separa
 grpVP = "📊 Perfil de volumen (zona con más negociación)"
 showVP      = input.bool(true, "Mostrar perfil de volumen del último rango (POC y zona de valor)", group=grpVP, tooltip="Como el 'Perfil de volumen de rango fijo' de TradingView: reparte el volumen por precio según el fractal: si la tendencia es alcista, desde el mínimo fuerte (inicio del descuento) hasta el precio actual; si es bajista, desde el máximo fuerte (inicio del premium). POC = precio donde más se negoció (el más importante). Precio SOBRE el POC = sesgo alcista; BAJO el POC = bajista. Es una aproximación con las velas del gráfico.")
 vpRows      = input.int(24, "Filas del perfil", minval=8, maxval=60, group=grpVP)
-vpMaxBars   = input.int(300, "Máx. velas hacia atrás", minval=30, maxval=900, group=grpVP)
+vpMaxBars   = input.int(300, "Máx. velas hacia atrás", minval=30, maxval=480, group=grpVP)
 vpWidthPct  = input.int(25, "Ancho máximo de las barras (% del rango en velas)", minval=5, maxval=60, group=grpVP)
 vpVA        = input.int(70, "Zona de valor (% del volumen)", minval=50, maxval=95, group=grpVP)
 vpDelta     = input.bool(true, "Colorear por quién dominó (verde compradores / rojo vendedores)", group=grpVP, tooltip="Aproxima el delta de cada fila con la posición del cierre dentro de cada vela.")
+structKeep  = input.int(8, "Cuántas rupturas de estructura dejar dibujadas (BOS/CHoCH/iBOS/iCHoCH)", minval=2, maxval=30, group=grpTidy, tooltip="Solo se conservan las últimas para no llenar el gráfico.")
+showHHLL    = input.bool(true, "Marcar HH / HL / LH / LL en los pivotes", group=grpTidy, tooltip="HH = máximo más alto, HL = mínimo más alto (tendencia alcista); LH = máximo más bajo, LL = mínimo más bajo (tendencia bajista).")
+showPDZ     = input.bool(true, "Zonas Premium (caro) y Discount (barato) del último rango", group=grpTidy, tooltip="Franja roja arriba del rango (zona cara para comprar, buena para vender) y verde abajo (zona barata para comprar).")
+pdZonePct   = input.int(8, "Alto de las zonas Premium/Discount (% del rango)", minval=3, maxval=30, group=grpTidy)
 whyKeep     = input.int(3, "Cuántos avisos ⛔ dejar en el gráfico", minval=0, maxval=20, group=grpTidy, tooltip="Solo se conservan los últimos avisos de 'tocó zona pero no dio señal' para no llenar el gráfico.")
 showInstTag  = input.bool(true, "Marcar OB institucionales con 🐋", group=grpDetect, tooltip="Institucional = la vela origen de la zona tuvo volumen inusual (ballena). Se marca con etiqueta 🐋 y color más vívido.")
 instBorder   = input.bool(true, "Resaltar OB institucionales con color más vívido", group=grpDetect)
@@ -380,10 +384,14 @@ iph = ta.pivothigh(high, internalSwingLen, internalSwingLen)
 ipl = ta.pivotlow(low, internalSwingLen, internalSwingLen)
 var float ilPH = na
 var float ilPL = na
+var int ilPHb = na
+var int ilPLb = na
 if not na(iph)
     ilPH := iph
+    ilPHb := bar_index - internalSwingLen
 if not na(ipl)
     ilPL := ipl
+    ilPLb := bar_index - internalSwingLen
 ibosUp = not na(ilPH) and close > ilPH and close[1] <= ilPH
 ibosDn = not na(ilPL) and close < ilPL and close[1] >= ilPL
 var bool itrendUp = false
@@ -394,26 +402,37 @@ if ibosDn
 ichochUp = ibosUp and not itrendUp[1]
 ichochDn = ibosDn and itrendUp[1]
 
-var label lastIStructLbl = na
-if showInternalStruct and ibosUp
-    if not na(lastIStructLbl)
-        label.delete(lastIStructLbl)
-    lastIStructLbl := label.new(bar_index, low, ichochUp ? "iCHoCH" : "iBOS", style=label.style_label_up, color=color.new(ichochUp ? color.lime : color.teal, 60), textcolor=color.white, size=size.tiny)
-if showInternalStruct and ibosDn
-    if not na(lastIStructLbl)
-        label.delete(lastIStructLbl)
-    lastIStructLbl := label.new(bar_index, high, ichochDn ? "iCHoCH" : "iBOS", style=label.style_label_down, color=color.new(ichochDn ? color.orange : color.red, 60), textcolor=color.white, size=size.tiny)
+var array<line>  structLines = array.new<line>()
+var array<label> structLbls = array.new<label>()
+f_structMark(int x1, float lvl, bool bull, string txt, bool internal) =>
+    int xs = math.max(x1, bar_index - 480)
+    int xm = math.round((xs + bar_index) / 2.0)
+    color c = bull ? color.new(color.teal, 0) : color.new(color.red, 0)
+    structLines.push(line.new(xs, lvl, bar_index, lvl, color=c, style=internal ? line.style_dashed : line.style_solid, width=1))
+    structLbls.push(label.new(xm, lvl, txt, style=bull ? label.style_label_down : label.style_label_up, color=color.new(color.white, 100), textcolor=c, size=internal ? size.tiny : size.small))
+    while structLines.size() > structKeep
+        line.delete(structLines.shift())
+    while structLbls.size() > structKeep
+        label.delete(structLbls.shift())
 
 showStruct = not masterClean or showBOSLabels
-var label lastStructLbl = na
-if showStruct and bosUp
-    if not na(lastStructLbl)
-        label.delete(lastStructLbl)
-    lastStructLbl := label.new(bar_index, low, chochUp ? "CHoCH" : "BOS", style=label.style_label_up, color=chochUp ? color.lime : color.teal, textcolor=color.black, size=lblSize)
-if showStruct and bosDn
-    if not na(lastStructLbl)
-        label.delete(lastStructLbl)
-    lastStructLbl := label.new(bar_index, high, chochDn ? "CHoCH" : "BOS", style=label.style_label_down, color=chochDn ? color.orange : color.red, textcolor=color.white, size=lblSize)
+if showInternalStruct and ibosUp and not na(ilPHb)
+    f_structMark(ilPHb, ilPH, true, ichochUp ? "iCHoCH" : "iBOS", true)
+if showInternalStruct and ibosDn and not na(ilPLb)
+    f_structMark(ilPLb, ilPL, false, ichochDn ? "iCHoCH" : "iBOS", true)
+if showStruct and bosUp and not na(lPHb)
+    f_structMark(lPHb, lPH, true, chochUp ? "CHoCH" : "BOS", false)
+if showStruct and bosDn and not na(lPLb)
+    f_structMark(lPLb, lPL, false, chochDn ? "CHoCH" : "BOS", false)
+
+// HH / HL / LH / LL en los pivotes de la estructura principal
+var array<label> hhLbls = array.new<label>()
+if showHHLL and not na(ph) and not na(lPH[1])
+    hhLbls.push(label.new(bar_index - swingLen, ph, ph > lPH[1] ? "HH" : "LH", style=label.style_label_down, color=color.new(color.white, 100), textcolor=ph > lPH[1] ? color.teal : color.red, size=size.tiny))
+if showHHLL and not na(pl) and not na(lPL[1])
+    hhLbls.push(label.new(bar_index - swingLen, pl, pl > lPL[1] ? "HL" : "LL", style=label.style_label_up, color=color.new(color.white, 100), textcolor=pl > lPL[1] ? color.teal : color.red, size=size.tiny))
+while hhLbls.size() > structKeep
+    label.delete(hhLbls.shift())
 
 f_hLine(float y, color col, int w, int sty) =>
     line.new(bar_index - 1, y, bar_index, y, extend=extend.right, color=col, width=w, style=sty == 1 ? line.style_dashed : sty == 2 ? line.style_dotted : line.style_solid)
@@ -1876,6 +1895,18 @@ if barstate.islast and showEqBox and not na(lPH) and not na(lPL)
         box.delete(eqBox)
     float eqBand = math.max(math.abs(lPH - lPL) * 0.03, atr * 0.15)
     eqBox := box.new(bar_index - 25, eq + eqBand, bar_index + colCards + cardW, eq - eqBand, border_color=color.new(color.gray, 55), bgcolor=color.new(color.gray, 82), text="Equilibrio", text_color=color.new(color.white, 25), text_size=size.small, text_halign=text.align_right, text_valign=text.align_center)
+
+var box pzBox = na
+var box dzBox = na
+if barstate.islast and showPDZ and not na(lPH) and not na(lPL) and not na(lPHb) and not na(lPLb)
+    if not na(pzBox)
+        box.delete(pzBox)
+    if not na(dzBox)
+        box.delete(dzBox)
+    float pdZ = math.abs(lPH - lPL) * pdZonePct / 100
+    int pdR = bar_index + colCards + cardW
+    pzBox := box.new(math.max(lPHb, bar_index - 480), lPH, pdR, lPH - pdZ, border_color=color.new(color.red, 55), bgcolor=color.new(color.red, 88), text="Premium (caro)", text_color=color.new(color.red, 10), text_size=size.small, text_halign=text.align_right, text_valign=text.align_bottom)
+    dzBox := box.new(math.max(lPLb, bar_index - 480), lPL + pdZ, pdR, lPL, border_color=color.new(color.green, 55), bgcolor=color.new(color.green, 88), text="Discount (barato)", text_color=color.new(color.green, 10), text_size=size.small, text_halign=text.align_right, text_valign=text.align_top)
 
 var array<box> vpBoxes = array.new<box>()
 var array<line> vpLines = array.new<line>()
