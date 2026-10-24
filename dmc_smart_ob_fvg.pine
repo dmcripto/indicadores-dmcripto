@@ -10,6 +10,12 @@
 //       Δ +39.7% | DISP. 100%
 //     Los OB que se solapan se fusionan en "ZONA OB ×N".
 //   · Fair Value Gaps con el porcentaje del hueco aún disponible (100%, 81%, 49%…).
+//   · Dominancia (COMPRADORES / VENDEDORES / NEUTRAL) según el Δ estimado e integridad de
+//     cada OB: 100% = virgen, un valor bajo = ya consumido por el precio (como en el video
+//     https://youtu.be/Ptml8qhUvOw).
+//   · OB internos vs SWING OB (rupturas importantes, borde grueso y más peso en la fuerza).
+//   · Filtro de ruido: RVOL mínimo y opción de mostrar solo OB con Δ a favor.
+//   · EQH / EQL (máximos y mínimos iguales).
 //   · Estructura: iCHoCH / iBOS (interna) y CHoCH / BOS (swing) con línea discontinua.
 //   · Premium / Equilibrio / Discount sobre el rango swing, con "Máximo Débil / Fuerte"
 //     y "Mínimo Fuerte / Débil".
@@ -34,6 +40,9 @@ showIBos = input.bool(false, "Mostrar también iBOS", group = gS)
 showSw   = input.bool(true, "Mostrar CHoCH / BOS swing", group = gS)
 colBull  = input.color(#26a69a, "Color alcista", group = gS)
 colBear  = input.color(#ef5350, "Color bajista", group = gS)
+showEq   = input.bool(true, "Mostrar EQH / EQL", group = gS)
+eqLen    = input.int(3, "Longitud del pivote EQH / EQL", minval = 1, group = gS)
+eqTol    = input.float(0.1, "Tolerancia EQH / EQL (x ATR)", minval = 0, step = 0.05, group = gS)
 
 gOB = "2) Order Blocks"
 showOB    = input.bool(true, "Mostrar Order Blocks", group = gOB)
@@ -43,6 +52,13 @@ obMaxLook = input.int(60, "Máximo de velas hacia atrás", minval = 5, maxval = 
 obMax     = input.int(20, "Máximo de OB activos", minval = 2, maxval = 60, group = gOB)
 obDelMit  = input.bool(true, "Eliminar OB al mitigar por cierre", group = gOB)
 lblOff    = input.int(3, "Desplazamiento de la etiqueta (velas)", minval = 0, group = gOB)
+showDom   = input.bool(true, "Mostrar dominancia en la etiqueta", group = gOB)
+domTh     = input.float(10.0, "Dominancia neutral si |Δ| menor a (%)", minval = 0, step = 1, group = gOB)
+pctLabel  = input.string("DISP.", "Texto del % restante", options = ["DISP.", "INTEGRIDAD"], group = gOB)
+dimInteg  = input.float(50.0, "Atenuar OB con integridad menor a (%)", minval = 0, maxval = 100, step = 5, group = gOB)
+obMinRvol = input.float(0.0, "Filtro de ruido: RVOL mínimo", minval = 0, step = 0.1, group = gOB)
+obAligned = input.bool(false, "Filtro de ruido: solo OB con Δ a favor", group = gOB)
+alertInt  = input.float(50.0, "Alerta de OB: integridad mínima (%)", minval = 0, maxval = 100, step = 5, group = gOB)
 colOBBull = input.color(color.new(#26a69a, 85), "Fondo OB alcista", group = gOB)
 colOBBear = input.color(color.new(#ef5350, 85), "Fondo OB bajista", group = gOB)
 
@@ -167,6 +183,28 @@ if showSw and sUp
 if showSw and sDn
     drawBreak(sBtmBar, sBtm, false, sChoch ? "CHoCH" : "BOS")
 
+// ═══════════════════════════ EQH / EQL ═══════════════════════════
+eqPH = ta.pivothigh(high, eqLen, eqLen)
+eqPL = ta.pivotlow(low, eqLen, eqLen)
+var float lastEH    = na
+var int   lastEHBar = na
+var float lastEL    = na
+var int   lastELBar = na
+if showEq and not na(eqPH)
+    int xh = bar_index - eqLen
+    if not na(lastEH) and math.abs(eqPH - lastEH) <= atr * eqTol
+        line.new(lastEHBar, lastEH, xh, eqPH, color = colBear, style = line.style_dotted)
+        label.new(math.round((lastEHBar + xh) / 2.0), math.max(lastEH, eqPH), "EQH", style = label.style_label_down, color = color.new(colBear, 100), textcolor = colBear, size = size.small)
+    lastEH    := eqPH
+    lastEHBar := xh
+if showEq and not na(eqPL)
+    int xl = bar_index - eqLen
+    if not na(lastEL) and math.abs(eqPL - lastEL) <= atr * eqTol
+        line.new(lastELBar, lastEL, xl, eqPL, color = colBull, style = line.style_dotted)
+        label.new(math.round((lastELBar + xl) / 2.0), math.min(lastEL, eqPL), "EQL", style = label.style_label_up, color = color.new(colBull, 100), textcolor = colBull, size = size.small)
+    lastEL    := eqPL
+    lastELBar := xl
+
 // ═══════════════════════════ ORDER BLOCKS ═══════════════════════════
 fmtPct(float x, bool sign) =>
     (sign and x >= 0 ? "+" : "") + str.tostring(x, "0.0") + "%"
@@ -181,10 +219,14 @@ obDisp(OB o) =>
     float d = h > 0 ? (o.dir == 1 ? (o.reach - o.bot) / h : (o.top - o.reach) / h) * 100 : 0.0
     math.max(0.0, math.min(100.0, d))
 
+obDom(OB o) =>
+    o.delta >= domTh ? "COMPRADORES" : o.delta <= -domTh ? "VENDEDORES" : "NEUTRAL"
+
 obText(OB o) =>
     string s = obStrength(o)
-    string head = (o.count > 1 ? "ZONA OB " : "OB ") + (o.dir == 1 ? "ALCISTA" : "BAJISTA") + (o.count > 1 ? " ×" + str.tostring(o.count) : "") + " | " + s
-    head + "\nVOL " + str.tostring(o.vol, format.volume) + " " + cur + " | RVOL " + str.tostring(o.rvol, "0.00") + "X" + "\nΔ " + fmtPct(o.delta, true) + " | DISP. " + str.tostring(obDisp(o), "0") + "%"
+    string head = (o.swing ? "SWING " : "") + (o.count > 1 ? "ZONA OB " : "OB ") + (o.dir == 1 ? "ALCISTA" : "BAJISTA") + (o.count > 1 ? " ×" + str.tostring(o.count) : "") + " | " + s
+    string dom = showDom ? " | DOM. " + obDom(o) : ""
+    head + "\nVOL " + str.tostring(o.vol, format.volume) + " " + cur + " | RVOL " + str.tostring(o.rvol, "0.00") + "X" + "\nΔ " + fmtPct(o.delta, true) + dom + " | " + pctLabel + " " + str.tostring(obDisp(o), "0") + "%"
 
 obColor(OB o) =>
     string s = obStrength(o)
@@ -195,7 +237,11 @@ obRefresh(OB o) =>
     box.set_rightbottom(o.bx, bar_index, o.bot)
     label.set_xy(o.lb, bar_index + lblOff, (o.top + o.bot) / 2)
     label.set_text(o.lb, obText(o))
-    label.set_color(o.lb, obColor(o))
+    bool worn = obDisp(o) < dimInteg
+    label.set_color(o.lb, worn ? color.new(obColor(o), 35) : obColor(o))
+    color base = o.dir == 1 ? colOBBull : colOBBear
+    box.set_bgcolor(o.bx, worn ? color.new(base, 93) : base)
+    box.set_border_width(o.bx, o.swing ? 2 : 1)
 
 // Mantenimiento de OB existentes
 if array.size(obs) > 0
@@ -236,6 +282,8 @@ newOB(bool go, int dir, int lookback, bool swing) =>
         float rv  = volSma[idx] > 0 ? volume[idx] / volSma[idx] : 0.0
         float qv  = qVol[idx]
         bool merged = false
+        bool alignedD = dir == 1 ? dlt > 0 : dlt < 0
+        bool showIt = rv >= obMinRvol and (not obAligned or alignedD)
         if array.size(obs) > 0
             for j = 0 to array.size(obs) - 1
                 OB o = array.get(obs, j)
@@ -253,7 +301,7 @@ newOB(bool go, int dir, int lookback, bool swing) =>
                     obRefresh(o)
                     merged := true
                     break
-        if not merged
+        if not merged and showIt
             color bg = dir == 1 ? colOBBull : colOBBear
             box bx = box.new(bar_index - idx, t, bar_index, b, border_color = color.new(bg, 40), bgcolor = bg)
             label lb = label.new(bar_index + lblOff, (t + b) / 2, "", style = label.style_label_left, textcolor = color.white, size = size.small, textalign = text.align_left)
@@ -338,14 +386,20 @@ if showPD and barstate.islast and not na(sTop) and not na(sBtm)
 // ═══════════════════════════ ALERTAS ═══════════════════════════
 bool inBullOB = false
 bool inBearOB = false
+bool inBullOBStrong = false
+bool inBearOBStrong = false
 if array.size(obs) > 0
     for i = 0 to array.size(obs) - 1
         OB o = array.get(obs, i)
         if o.created < bar_index
             if o.dir == 1 and low <= o.top and close >= o.bot
                 inBullOB := true
+                if o.delta >= domTh and obDisp(o) >= alertInt
+                    inBullOBStrong := true
             if o.dir == -1 and high >= o.bot and close <= o.top
                 inBearOB := true
+                if o.delta <= -domTh and obDisp(o) >= alertInt
+                    inBearOBStrong := true
 
 alertcondition(iUp and iChoch, "DMC: iCHoCH alcista", "Cambio de carácter interno alcista.")
 alertcondition(iDn and iChoch, "DMC: iCHoCH bajista", "Cambio de carácter interno bajista.")
@@ -353,5 +407,7 @@ alertcondition(sUp and sChoch, "DMC: CHoCH alcista", "Cambio de carácter swing 
 alertcondition(sDn and sChoch, "DMC: CHoCH bajista", "Cambio de carácter swing bajista.")
 alertcondition(inBullOB and not inBullOB[1], "DMC: precio en OB alcista", "El precio entró en un Order Block alcista.")
 alertcondition(inBearOB and not inBearOB[1], "DMC: precio en OB bajista", "El precio entró en un Order Block bajista.")
+alertcondition(inBullOBStrong and not inBullOBStrong[1], "DMC: OB alcista con compradores", "Precio en OB alcista con dominancia compradora e integridad suficiente. Buscar doble piso en temporalidad menor.")
+alertcondition(inBearOBStrong and not inBearOBStrong[1], "DMC: OB bajista con vendedores", "Precio en OB bajista con dominancia vendedora e integridad suficiente. Buscar doble techo en temporalidad menor.")
 alertcondition(fvgBull, "DMC: FVG alcista", "Nuevo FVG alcista.")
 alertcondition(fvgBear, "DMC: FVG bajista", "Nuevo FVG bajista.")

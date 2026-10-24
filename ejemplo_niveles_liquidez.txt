@@ -1,0 +1,9 @@
+# Formato por linea: precio;tipo;texto;monto
+# tipo: LIQ_LONG, LIQ_SHORT, SOPORTE, RESISTENCIA o NIVEL
+# texto y monto (en millones) son opcionales. Las lineas con # se ignoran.
+82500;LIQ_SHORT;Cluster de cortos;120
+81900;LIQ_SHORT;;45
+80650;LIQ_LONG;Cluster de largos;210
+79800;LIQ_LONG;;60
+81200;SOPORTE
+82200;RESISTENCIA

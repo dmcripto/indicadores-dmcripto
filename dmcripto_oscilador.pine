@@ -1,5 +1,5 @@
 //@version=6
-indicator("OSCILADOR-OB ORDEN BLOCK + ADX · DMCRIPTO V2.0", shorttitle="OSC-OB DMC", overlay=false, max_lines_count=100, max_labels_count=300)
+indicator("DMCRIPTO OSCILADOR V3.0", shorttitle="DMOSC V3", overlay=false, max_lines_count=100, max_labels_count=300)
 
 // ------------------- MODO MÓVIL -------------------
 grpMob = "📱 Modo Móvil"
@@ -41,6 +41,7 @@ sigWindow   = input.int(8, "Ventana de sobreventa/sobrecompra previa (velas)", m
 sigMaxOsc   = input.int(60, "No perseguir: LONG solo si el oscilador ≤ este valor (SHORT si ≥ 100 − valor)", minval=50, maxval=90, group=grpSig)
 sigCooldown = input.int(5, "Velas mínimas entre señales del mismo lado", minval=0, maxval=50, group=grpSig)
 minScore    = input.int(40, "Puntaje mínimo de confluencia para emitir la señal", minval=0, maxval=100, group=grpSig, tooltip="Solo aplica en modo Ventana. 0 = sin filtro. El puntaje de 0 a 100 suma zona, agotamiento, divergencia, momentum, ADX, directriz y timeframe mayor.")
+chaseATR    = input.float(2.0, "No perseguir por precio: máx. recorrido desde el extremo (x ATR)", minval=0.0, step=0.5, group=grpSig, tooltip="SHORT solo si el precio no ha caído más de este número de ATR desde el máximo de la ventana. LONG solo si no ha subido más desde el mínimo. Evita señales que llegan cuando el movimiento ya ocurrió. 0 = sin filtro.")
 
 // ------------------- DIVERGENCIAS -------------------
 grpDiv = "🔀 Divergencias oscilador / precio"
@@ -51,6 +52,7 @@ divMaxBars  = input.int(60, "Distancia máxima entre pivotes (velas)", minval=10
 divZoneTol  = input.int(10, "Tolerancia de zona extrema (puntos)", minval=0, maxval=30, group=grpDiv, tooltip="El primer pivote debe estar en sobreventa/sobrecompra o a menos de estos puntos de ella.")
 divMemory   = input.int(20, "Vigencia de la divergencia en el puntaje (velas)", minval=3, maxval=60, group=grpDiv)
 maxDivLines = input.int(4, "Máx. divergencias dibujadas", minval=1, maxval=20, group=grpDiv)
+divConfirm  = input.bool(true, "La divergencia solo es señal si se confirma con el precio", group=grpDiv, tooltip="SHORT: el precio debe cerrar bajo el mínimo de la vela del pico y no haber hecho un máximo más alto después. LONG: lo contrario. Sin esto, una divergencia puede dar señal mientras el precio sigue en la dirección contraria. La divergencia se sigue dibujando y sumando al puntaje.")
 
 // ------------------- TIMEFRAME MAYOR -------------------
 grpHTFo = "🌐 Confirmación de timeframe mayor"
@@ -79,8 +81,8 @@ showOscPanel = input.bool(true, "Mostrar mini-panel (5 filas)", group=grpPanel, 
 oscPanelSize = input.string("Pequeño", "Tamaño del mini-panel", options=["Pequeño", "Normal", "Grande", "Muy grande"], group=grpPanel, tooltip="Elige qué tan grande quieres el panel en PC. En Modo Móvil se fuerza tamaño mínimo.")
 semVigencia  = input.int(10, "Vigencia del semáforo (velas)", minval=3, maxval=30, group=grpPanel, tooltip="Cuántas velas sigue válido un giro de momentum antes de que el semáforo vuelva a ESPERA.")
 showScoreRows = input.bool(true, "Mostrar puntaje, divergencia y timeframe mayor en el mini-panel", group=grpPanel)
+compactPanel  = input.bool(true, "Mini-panel compacto (6 filas en vez de 8)", group=grpPanel, tooltip="Junta momentum con zona y divergencia con timeframe mayor para que el panel quepa en paneles bajos. Desactívalo para ver las 8 filas separadas.")
 
-// ------------------- PUENTE DE SEÑALES -------------------
 grpBridge = "📨 Puente de señales"
 sendBridge = input.bool(true, "Enviar señales LONG/SHORT con datos por alert()", group=grpBridge, tooltip="Crea la alerta con condición 'Cualquier llamada a alert()' en este indicador. El mensaje es un JSON listo para el puente por correo / webhook.")
 
@@ -282,6 +284,12 @@ if showTL and barstate.islast
         slopeSup = (sp1 - sp2) / (spb1 - spb2)
         endBarSup = bar_index + tlProj
         endValSup = sp1 + slopeSup * (endBarSup - spb1)
+        if endValSup > 100 and slopeSup > 0
+            endBarSup := math.max(bar_index, math.round(spb1 + (100 - sp1) / slopeSup))
+            endValSup := 100.0
+        if endValSup < 0 and slopeSup < 0
+            endBarSup := math.max(bar_index, math.round(spb1 + (0 - sp1) / slopeSup))
+            endValSup := 0.0
         dispTL := line.new(spb2, sp2, endBarSup, endValSup, color=supBroken ? color.new(color.gray, 60) : tlBullCol, style=supBroken ? line.style_dotted : line.style_solid, width=2)
         if showTLName and not mobileMode and not supBroken
             dispTLnm := label.new(endBarSup, endValSup, "DIRECTRIZ ALCISTA", style=label.style_label_left, color=color.new(color.green, 10), textcolor=color.white, size=size.tiny)
@@ -289,6 +297,12 @@ if showTL and barstate.islast
         slopeRes = (rp1 - rp2) / (rpb1 - rpb2)
         endBarRes = bar_index + tlProj
         endValRes = rp1 + slopeRes * (endBarRes - rpb1)
+        if endValRes > 100 and slopeRes > 0
+            endBarRes := math.max(bar_index, math.round(rpb1 + (100 - rp1) / slopeRes))
+            endValRes := 100.0
+        if endValRes < 0 and slopeRes < 0
+            endBarRes := math.max(bar_index, math.round(rpb1 + (0 - rp1) / slopeRes))
+            endValRes := 0.0
         dispTL := line.new(rpb2, rp2, endBarRes, endValRes, color=resBroken ? color.new(color.gray, 60) : tlBearCol, style=resBroken ? line.style_dotted : line.style_solid, width=2)
         if showTLName and not mobileMode and not resBroken
             dispTLnm := label.new(endBarRes, endValRes, "DIRECTRIZ BAJISTA", style=label.style_label_left, color=color.new(color.red, 10), textcolor=color.white, size=size.tiny)
@@ -341,6 +355,11 @@ if showDiv and not na(dPH)
 while divLines.size() > maxDivLines
     line.delete(divLines.shift())
 
+hhRecent = ta.highest(high, divLen)
+llRecent = ta.lowest(low, divLen)
+bullDivOK = bullDivNow and (not divConfirm or (close > high[divLen] and llRecent >= dlPx))
+bearDivOK = bearDivNow and (not divConfirm or (close < low[divLen] and hhRecent <= dhPx))
+
 bsDivBull = ta.barssince(bullDivNow)
 bsDivBear = ta.barssince(bearDivNow)
 divBullRec = not na(bsDivBull) and bsDivBull <= divMemory
@@ -370,8 +389,13 @@ int scoreS = (recentOB ? 20 : osc > 60 ? 10 : 0) + (exhBearRec ? 15 : 0) + (divB
 
 // ------------------- SEÑALES LONG / SHORT -------------------
 origMode = sigMode == "Misma vela (original)"
-bullRaw = origMode ? (osc <= osLevel and bosUp) : ((recentOS and osc <= sigMaxOsc and bosUp) or bullDivNow)
-bearRaw = origMode ? (osc >= obLevel and bosDn) : ((recentOB and osc >= 100 - sigMaxOsc and bosDn) or bearDivNow)
+atrO = ta.atr(14)
+hhWin = ta.highest(high, sigWindow)
+llWin = ta.lowest(low, sigWindow)
+noChaseS = chaseATR <= 0 or (hhWin - close) <= atrO * chaseATR
+noChaseL = chaseATR <= 0 or (close - llWin) <= atrO * chaseATR
+bullRaw = origMode ? (osc <= osLevel and bosUp) : ((recentOS and osc <= sigMaxOsc and bosUp and noChaseL) or bullDivOK)
+bearRaw = origMode ? (osc >= obLevel and bosDn) : ((recentOB and osc >= 100 - sigMaxOsc and bosDn and noChaseS) or bearDivOK)
 var int lastBullSig = -1000
 var int lastBearSig = -1000
 bullSig = bullRaw and (origMode or scoreL >= minScore) and bar_index - lastBullSig > sigCooldown
@@ -380,19 +404,19 @@ if bullSig
     lastBullSig := bar_index
 if bearSig
     lastBearSig := bar_index
-
-plotshape(not mobileMode and bullSig, "Señal LONG", shape.triangleup, location.bottom, color.green, size=size.small)
-plotshape(mobileMode and bullSig, "Señal LONG móvil", shape.triangleup, location.bottom, color.green, size=size.tiny)
-plotshape(not mobileMode and bearSig, "Señal SHORT", shape.triangledown, location.top, color.red, size=size.small)
-plotshape(mobileMode and bearSig, "Señal SHORT móvil", shape.triangledown, location.top, color.red, size=size.tiny)
-
-if not mobileMode and bullSig
-    label.new(bar_index, 8, f_grade(scoreL) + " " + str.tostring(scoreL), style=label.style_label_up, color=color.new(color.green, 30), textcolor=color.white, size=size.tiny)
-if not mobileMode and bearSig
-    label.new(bar_index, 92, f_grade(scoreS) + " " + str.tostring(scoreS), style=label.style_label_down, color=color.new(color.red, 30), textcolor=color.white, size=size.tiny)
-
 if sendBridge and (bullSig or bearSig)
     alert('{"fuente":"OSC","lado":"' + (bullSig ? "LONG" : "SHORT") + '","simbolo":"' + syminfo.ticker + '","tf":"' + timeframe.period + '","entrada":' + str.tostring(close, format.mintick) + ',"puntaje":' + str.tostring(bullSig ? scoreL : scoreS) + ',"grado":"' + f_grade(bullSig ? scoreL : scoreS) + '"}', alert.freq_once_per_bar_close)
+
+plotshape(not mobileMode and bullSig ? 14 : na, "Señal LONG", shape.triangleup, location.absolute, color.green, size=size.small)
+plotshape(mobileMode and bullSig ? 14 : na, "Señal LONG móvil", shape.triangleup, location.absolute, color.green, size=size.tiny)
+plotshape(not mobileMode and bearSig ? 86 : na, "Señal SHORT", shape.triangledown, location.absolute, color.red, size=size.small)
+plotshape(mobileMode and bearSig ? 86 : na, "Señal SHORT móvil", shape.triangledown, location.absolute, color.red, size=size.tiny)
+
+// Texto bajo el triángulo LONG y sobre el triángulo SHORT, para leer la señal a primera vista
+if bullSig
+    label.new(bar_index, 12, mobileMode ? "LONG" : "LONG · " + f_grade(scoreL) + " " + str.tostring(scoreL), style=label.style_label_up, color=color.new(color.green, 10), textcolor=color.white, size=mobileMode ? size.tiny : size.normal)
+if bearSig
+    label.new(bar_index, 88, mobileMode ? "SHORT" : "SHORT · " + f_grade(scoreS) + " " + str.tostring(scoreS), style=label.style_label_down, color=color.new(color.red, 10), textcolor=color.white, size=mobileMode ? size.tiny : size.normal)
 
 // Series disponibles en la ventana de datos y como fuente en otros indicadores
 plot(bullSig ? 1 : bearSig ? -1 : 0, "Señal (+1 LONG / -1 SHORT)", display=display.data_window)
@@ -403,7 +427,7 @@ plot(scoreS, "Puntaje SHORT", display=display.data_window)
 if showOscPanel and barstate.islast
     var table op = na
     if na(op)
-        op := table.new(position.top_right, 2, 8, bgcolor=color.new(color.black, 75), border_width=1, border_color=color.new(color.gray, 60))
+        op := table.new(position.top_right, 2, compactPanel ? 6 : 8, bgcolor=color.new(color.black, 75), border_width=1, border_color=color.new(color.gray, 60))
     oSz = mobileMode ? size.tiny : oscPanelSize == "Pequeño" ? size.tiny : oscPanelSize == "Normal" ? size.small : oscPanelSize == "Grande" ? size.normal : size.large
 
     momUp  = osc > osc[1]
@@ -422,30 +446,45 @@ if showOscPanel and barstate.islast
     semTxt = semLong ? "🟢 BUSCA LONG" : semShort ? "🔴 BUSCA SHORT" : "🟡 ESPERA TU ZONA"
     semCol = semLong ? color.green : semShort ? color.red : color.yellow
 
-    table.cell(op, 0, 0, "⚡ MOMENTUM", text_color=color.white, text_size=oSz)
-    table.cell(op, 1, 0, momTxt, text_color=momCol, text_size=oSz)
-    table.cell(op, 0, 1, "🌡 ZONA", text_color=color.white, text_size=oSz)
-    table.cell(op, 1, 1, zonaTxt, text_color=zonaCol, text_size=oSz)
-    table.cell(op, 0, 2, "🧭 DIRECCIÓN", text_color=color.white, text_size=oSz)
-    table.cell(op, 1, 2, tlTxt, text_color=tlCol, text_size=oSz)
-    table.cell(op, 0, 3, "🕐 ÚLTIMO CAMBIO", text_color=color.white, text_size=oSz)
-    table.cell(op, 1, 3, lastBrkTxt, text_color=lastBrkCol, text_size=oSz)
-    table.cell(op, 0, 4, "🚦 SEMÁFORO", text_color=color.white, text_size=oSz)
-    table.cell(op, 1, 4, semTxt, text_color=semCol, text_size=oSz)
+    scTxt = "LONG " + str.tostring(scoreL) + " (" + f_grade(scoreL) + ") · SHORT " + str.tostring(scoreS) + " (" + f_grade(scoreS) + ")"
+    scCol = scoreL >= minScore and scoreL > scoreS ? color.green : scoreS >= minScore and scoreS > scoreL ? color.red : color.gray
+    divTxt = divBullRec and (not divBearRec or bsDivBull <= bsDivBear) ? "Alcista hace " + str.tostring(bsDivBull) + " velas" : divBearRec ? "Bajista hace " + str.tostring(bsDivBear) + " velas" : "—"
+    divCol = divBullRec and (not divBearRec or bsDivBull <= bsDivBear) ? color.lime : divBearRec ? color.fuchsia : color.gray
+    htfTxt = not useHTFosc ? "OFF" : htfBullOK ? "A favor de LONG" : htfBearOK ? "A favor de SHORT" : "Neutro"
+    htfCol = htfBullOK ? color.green : htfBearOK ? color.red : color.gray
 
-    if showScoreRows
-        scTxt = "LONG " + str.tostring(scoreL) + " (" + f_grade(scoreL) + ") · SHORT " + str.tostring(scoreS) + " (" + f_grade(scoreS) + ")"
-        scCol = scoreL >= minScore and scoreL > scoreS ? color.green : scoreS >= minScore and scoreS > scoreL ? color.red : color.gray
-        divTxt = divBullRec and (not divBearRec or bsDivBull <= bsDivBear) ? "Alcista hace " + str.tostring(bsDivBull) + " velas" : divBearRec ? "Bajista hace " + str.tostring(bsDivBear) + " velas" : "—"
-        divCol = divBullRec and (not divBearRec or bsDivBull <= bsDivBear) ? color.lime : divBearRec ? color.fuchsia : color.gray
-        htfTxt = not useHTFosc ? "OFF" : htfBullOK ? "A favor de LONG" : htfBearOK ? "A favor de SHORT" : "Neutro"
-        htfCol = htfBullOK ? color.green : htfBearOK ? color.red : color.gray
-        table.cell(op, 0, 5, "🎯 PUNTAJE", text_color=color.white, text_size=oSz)
-        table.cell(op, 1, 5, scTxt, text_color=scCol, text_size=oSz)
-        table.cell(op, 0, 6, "🔀 DIVERGENCIA", text_color=color.white, text_size=oSz)
-        table.cell(op, 1, 6, divTxt, text_color=divCol, text_size=oSz)
-        table.cell(op, 0, 7, "🌐 TF MAYOR " + htfTFOscUsed, text_color=color.white, text_size=oSz)
-        table.cell(op, 1, 7, htfTxt, text_color=htfCol, text_size=oSz)
+    if compactPanel
+        table.cell(op, 0, 0, "⚡ MOMENTUM · ZONA", text_color=color.white, text_size=oSz)
+        table.cell(op, 1, 0, momTxt + " · " + zonaTxt, text_color=momCol, text_size=oSz)
+        table.cell(op, 0, 1, "🧭 DIRECCIÓN", text_color=color.white, text_size=oSz)
+        table.cell(op, 1, 1, tlTxt, text_color=tlCol, text_size=oSz)
+        table.cell(op, 0, 2, "🕐 ÚLTIMO CAMBIO", text_color=color.white, text_size=oSz)
+        table.cell(op, 1, 2, lastBrkTxt, text_color=lastBrkCol, text_size=oSz)
+        table.cell(op, 0, 3, "🚦 SEMÁFORO", text_color=color.white, text_size=oSz)
+        table.cell(op, 1, 3, semTxt, text_color=semCol, text_size=oSz)
+        if showScoreRows
+            table.cell(op, 0, 4, "🎯 PUNTAJE", text_color=color.white, text_size=oSz)
+            table.cell(op, 1, 4, scTxt, text_color=scCol, text_size=oSz)
+            table.cell(op, 0, 5, "🔀 DIV · 🌐 TF " + htfTFOscUsed, text_color=color.white, text_size=oSz)
+            table.cell(op, 1, 5, (divTxt == "—" ? "Sin divergencia" : divTxt) + " · " + htfTxt, text_color=divTxt != "—" ? divCol : htfCol, text_size=oSz)
+    else
+        table.cell(op, 0, 0, "⚡ MOMENTUM", text_color=color.white, text_size=oSz)
+        table.cell(op, 1, 0, momTxt, text_color=momCol, text_size=oSz)
+        table.cell(op, 0, 1, "🌡 ZONA", text_color=color.white, text_size=oSz)
+        table.cell(op, 1, 1, zonaTxt, text_color=zonaCol, text_size=oSz)
+        table.cell(op, 0, 2, "🧭 DIRECCIÓN", text_color=color.white, text_size=oSz)
+        table.cell(op, 1, 2, tlTxt, text_color=tlCol, text_size=oSz)
+        table.cell(op, 0, 3, "🕐 ÚLTIMO CAMBIO", text_color=color.white, text_size=oSz)
+        table.cell(op, 1, 3, lastBrkTxt, text_color=lastBrkCol, text_size=oSz)
+        table.cell(op, 0, 4, "🚦 SEMÁFORO", text_color=color.white, text_size=oSz)
+        table.cell(op, 1, 4, semTxt, text_color=semCol, text_size=oSz)
+        if showScoreRows
+            table.cell(op, 0, 5, "🎯 PUNTAJE", text_color=color.white, text_size=oSz)
+            table.cell(op, 1, 5, scTxt, text_color=scCol, text_size=oSz)
+            table.cell(op, 0, 6, "🔀 DIVERGENCIA", text_color=color.white, text_size=oSz)
+            table.cell(op, 1, 6, divTxt, text_color=divCol, text_size=oSz)
+            table.cell(op, 0, 7, "🌐 TF MAYOR " + htfTFOscUsed, text_color=color.white, text_size=oSz)
+            table.cell(op, 1, 7, htfTxt, text_color=htfCol, text_size=oSz)
 
 // ------------------- ALERTAS -------------------
 alertcondition(exhBull, "Agotamiento Alcista", "🟢 Agotamiento alcista · {{ticker}} · {{interval}}")

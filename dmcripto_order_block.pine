@@ -1,5 +1,5 @@
 //@version=6
-indicator("DMCRIPTO ORDER BLOCK", shorttitle="DMOB", overlay=true, max_boxes_count=500, max_lines_count=300, max_labels_count=500, max_bars_back=1000)
+indicator("DMCRIPTO ORDER BLOCK V3.0", shorttitle="DMOB V3", overlay=true, max_boxes_count=500, max_lines_count=300, max_labels_count=500, max_bars_back=1000)
 
 // ------------------- MODO MÓVIL -------------------
 grpMob = "📱 Modo Móvil"
@@ -73,6 +73,9 @@ scoreStrength = input.bool(true, "Fuerza del OB según el Score de calidad", gro
 scoreStrong   = input.int(60, "Score mínimo para FUERTE", minval=1, maxval=100, group=grpSM)
 scoreMod      = input.int(40, "Score mínimo para MODERADO", minval=1, maxval=100, group=grpSM)
 
+fvgSignals    = input.bool(true, "Las zonas FVG también pueden dar señal", group=grpSM, tooltip="Antes solo los Order Blocks daban señal y los FVG eran informativos. Con esto, el primer toque a un FVG con vela de rechazo (y sin dominancia contraria) también genera LONG o SHORT, con el SL más allá del hueco. Los FVG son mucho más frecuentes que los OB.")
+showWhy       = input.bool(true, "Mostrar ⛔ cuando una zona tocada NO da señal, y qué filtro la bloqueó", group=grpSM, tooltip="En la vela del toque aparece una etiqueta gris, por ejemplo 'SHORT ⛔ oscilador ADX', con los filtros que la frenaron. Sirve para ver qué ajustar.")
+
 // ==================== 🧰 SESIÓN, RIESGO Y COSTOS ====================
 grpRisk = "🧰 Sesión, riesgo y costos"
 useSessFilter = input.bool(false, "Filtro de sesión: operar solo en las sesiones elegidas", group=grpRisk, tooltip="Usa los horarios y la zona horaria del grupo 'Niveles de Sesión y Referencia'. Fuera de las sesiones permitidas no nace ninguna señal.")
@@ -85,9 +88,9 @@ riskPct       = input.float(1.0, "Riesgo por operación (%)", minval=0.05, step=
 feePct        = input.float(0.06, "Comisión por lado (%) para las estadísticas", minval=0.0, step=0.01, group=grpRisk, tooltip="Se descuenta en R de 'Netos' en cada señal (entrada y salida). 0.06% es una comisión típica de futuros; ajústala a tu exchange.")
 slipPct       = input.float(0.02, "Deslizamiento por lado (%) para las estadísticas", minval=0.0, step=0.01, group=grpRisk)
 
-// ==================== 🔗 CONEXIÓN CON OSCILADOR V2.0 ====================
-grpLink = "🔗 Conexión con OSCILADOR V2.0"
-useOscLink     = input.bool(true, "Activar conexión con el oscilador", group=grpLink, tooltip="Activada por defecto. Requiere tener el OSCILADOR-OB V2.0 en el mismo gráfico y temporalidad. Pine no permite preseleccionar las series de otro indicador: elígelas una sola vez abajo y guarda el layout o una plantilla para que TradingView las recuerde. Mientras no sean válidas, el filtro se ignora y el panel lo avisa.")
+// ==================== 🔗 CONEXIÓN CON OSCILADOR V3.0 ====================
+grpLink = "🔗 Conexión con OSCILADOR V3.0"
+useOscLink     = input.bool(true, "Activar conexión con el oscilador", group=grpLink, tooltip="Activada por defecto. Requiere tener el OSCILADOR V3.0 en el mismo gráfico y temporalidad. Pine no permite preseleccionar las series de otro indicador: elígelas una sola vez abajo y guarda el layout o una plantilla para que TradingView las recuerde. Mientras no sean válidas, el filtro se ignora y el panel lo avisa.")
 srcOscSig      = input.source(close, "Serie: Señal (+1 LONG / −1 SHORT)", group=grpLink)
 srcOscScoreL   = input.source(close, "Serie: Puntaje LONG", group=grpLink)
 srcOscScoreS   = input.source(close, "Serie: Puntaje SHORT", group=grpLink)
@@ -95,14 +98,33 @@ minLinkScore   = input.int(40, "Puntaje mínimo del oscilador para permitir la s
 requireOscSig  = input.bool(false, "Exigir además una señal reciente del oscilador en la misma dirección", group=grpLink, tooltip="Más estricto: el oscilador debe haber emitido su propia señal LONG/SHORT dentro de la vigencia.")
 linkWindow     = input.int(10, "Vigencia de la señal del oscilador (velas)", minval=1, maxval=50, group=grpLink)
 
+// ==================== 🌊 LIQUIDEZ EXTERNA (pegada desde tu app o API) ====================
+grpExt = "🌊 Liquidez externa (pegar desde tu app o API)"
+showExt     = input.bool(true, "Dibujar liquidez externa y automática (interruptor general)", group=grpExt)
+showAuto    = input.bool(true, "Automático: máximos y mínimos previos (día, semana y mes)", group=grpExt, tooltip="PDH/PDL, PWH/PWL y PMH/PML: los extremos del día, la semana y el mes anteriores, donde suelen acumularse órdenes. Se calculan solos desde el gráfico.")
+showEst     = input.bool(true, "Automático: liquidaciones estimadas por apalancamiento", group=grpExt, tooltip="ESTIMACIÓN, no dato real de liquidaciones. Desde el último máximo importante calcula dónde se liquidarían largos abiertos ahí con cada apalancamiento, y desde el último mínimo importante dónde se liquidarían cortos. Solo muestra los niveles que el precio aún no ha cruzado. Para datos reales de liquidaciones pégalos abajo.")
+estPivLen   = input.int(30, "Pivote del swing para las liquidaciones estimadas (velas a cada lado)", minval=5, group=grpExt)
+estLev1     = input.int(25, "Apalancamiento estimado 1", minval=2, group=grpExt)
+estLev2     = input.int(50, "Apalancamiento estimado 2", minval=2, group=grpExt)
+estLev3     = input.int(100, "Apalancamiento estimado 3", minval=2, group=grpExt)
+extText     = input.text_area("", "Niveles (uno por línea)", group=grpExt, tooltip="Formato por línea: precio;tipo;texto;monto. Tipos: LIQ_LONG (liquidaciones de largos, bajo el precio), LIQ_SHORT (liquidaciones de cortos, sobre el precio), SOPORTE, RESISTENCIA o NIVEL. El texto y el monto (en millones) son opcionales. Ejemplo: 82500;LIQ_SHORT;Cluster de cortos;120. Las líneas que empiezan con # se ignoran. Máximo 40 niveles. Son una foto del momento en que los pegas, no un dato en vivo.")
+extLongCol  = input.color(color.new(#FFEB3B, 0), "Color liquidaciones de largos", group=grpExt)
+extShortCol = input.color(color.new(#FF4081, 0), "Color liquidaciones de cortos", group=grpExt)
+extUseSL    = input.bool(true, "Proteger el SL: ponerlo más allá de la liquidación cercana a la zona", group=grpExt, tooltip="LONG: si hay un nivel LIQ_LONG justo bajo el OB, el SL queda por debajo de él. SHORT: si hay un LIQ_SHORT justo sobre el OB, el SL queda por encima. Solo actúa en señales en vivo, nunca en el historial, porque los niveles pegados son una foto actual y alterarían las estadísticas pasadas.")
+extSlRange  = input.float(1.5, "Alcance para buscar esa liquidación (x ATR desde la zona)", minval=0.2, step=0.1, group=grpExt)
+
 // ==================== 5. 💧 LIQUIDEZ ====================
 grpLiq = "💧 Liquidez (EQH/EQL/24h/SR)"
 showLiq    = input.bool(true, "Mostrar liquidez EQH/EQL", group=grpLiq)
 liqLen     = input.int(3, "Pivote de liquidez", minval=2, group=grpLiq)
 liqTolATR  = input.float(0.25, "Tolerancia (x ATR)", step=0.05, group=grpLiq)
 liqCol     = input.color(color.new(color.aqua, 20), "Color liquidez normal", group=grpLiq)
-srMin      = input.int(3, "🧱 Toques para volver S/R", minval=2, maxval=8, group=grpLiq, tooltip="Cuando una línea de liquidez es tocada N veces, se convierte en S/R (soporte/resistencia confirmada) y cambia de color.")
-srCol      = input.color(color.new(color.white, 0), "Color S/R", group=grpLiq)
+srMin      = input.int(2, "🧱 Toques para volver S/R", minval=2, maxval=8, group=grpLiq, tooltip="Cuando una línea de liquidez es tocada N veces, se convierte en S/R (soporte/resistencia confirmada) y cambia de color.")
+srCol      = input.color(color.new(color.white, 0), "Color S/R (en desuso: ahora hay color por tipo)", group=grpLiq)
+supCol     = input.color(color.new(#2962FF, 0), "Color SOPORTE automático", group=grpLiq)
+resCol     = input.color(color.new(#FF9800, 0), "Color RESISTENCIA automática", group=grpLiq)
+srMaxATR   = input.float(8.0, "Distancia máxima para mostrar líneas de liquidez y S/R (x ATR del precio)", minval=0.0, step=1.0, group=grpLiq, tooltip="Las líneas más lejanas que esto se ocultan, junto con su texto y su marca en la escala, para que TradingView no aplaste las velas al ajustar la escala vertical. Siguen guardadas y reaparecen cuando el precio se acerca. 0 = mostrar todas. No afecta a los niveles pegados en liquidez externa.")
+showSRLabel = input.bool(true, "Texto SOPORTE / RESISTENCIA con precio en la línea", group=grpLiq, tooltip="Cuando un nivel de liquidez es rechazado las veces indicadas se dibuja solo como línea de soporte (azul) o resistencia (naranja), con su texto. Los soportes y resistencias no se borran al entrar niveles nuevos, solo cuando el precio los rompe.")
 liqHint    = input.bool(true, "Etiquetas POSIBLE LONG/SHORT (solo la más cercana)", group=grpLiq, tooltip="Muestra MÁXIMO 2 etiquetas en el chart: POSIBLE SHORT = liquidez más cercana por encima del precio · POSIBLE LONG = más cercana por debajo. El resto de niveles solo se ve como línea + precio en la barra lateral.")
 maxLiq     = input.int(2, "Máx. líneas por lado", minval=1, maxval=10, group=grpLiq, tooltip="Reducido a 2 por defecto para menos saturación visual.")
 showLiq24  = input.bool(true, "🕐 Liquidez 24h (día anterior)", group=grpLiq, tooltip="ON por defecto: dibuja las líneas de máximo/mínimo de las últimas 24h y llena el panel 'Liq 24h ↑/↓'. Solo es informativo: no exige nada para las señales (eso lo controla 'Exigir barrido de liquidez reciente', que sigue en OFF).")
@@ -121,10 +143,10 @@ grpLbl = "🔤 Etiquetas"
 lblSizeInput = input.string("Pequeño", "Tamaño de etiquetas del gráfico", options=["Muy pequeño", "Pequeño", "Normal", "Grande"], group=grpLbl, tooltip="Controla el tamaño de TODAS las etiquetas: ENTRADA/TP/SL, LONG/SHORT, BOS/CHoCH, sesiones, MÁX/MÍN ANTERIOR, PB, 💧 y PREMIUM/DESCUENTO.")
 lblSize = lblSizeInput == "Muy pequeño" ? size.tiny : lblSizeInput == "Pequeño" ? size.small : lblSizeInput == "Normal" ? size.normal : size.large
 
-grpOsc = "🔗 Oscilador (IGUAL que en el OSCILADOR V2.0)"
+grpOsc = "🔗 Oscilador (IGUAL que en el OSCILADOR V3.0)"
 rsiLenConf   = input.int(14, "RSI", group=grpOsc)
 stochLenConf = input.int(14, "Estocástico", group=grpOsc)
-stochSmoothConf = input.int(3, "Suavizado %K del Estocástico (igual que el oscilador)", minval=1, maxval=10, group=grpOsc, tooltip="Debe coincidir con el valor del OSCILADOR V2.0 para que ambos lean lo mismo. 1 = sin suavizar.")
+stochSmoothConf = input.int(3, "Suavizado %K del Estocástico (igual que el oscilador)", minval=1, maxval=10, group=grpOsc, tooltip="Debe coincidir con el valor del OSCILADOR V3.0 para que ambos lean lo mismo. 1 = sin suavizar.")
 obLevelConf  = input.int(75, "Sobrecompra", group=grpOsc)
 osLevelConf  = input.int(25, "Sobreventa", group=grpOsc)
 useCombined  = input.bool(true, "Exigir confirmación del oscilador", group=grpOsc, tooltip="RECOMENDADO ON: tu protección anti-FOMO. Una señal LONG solo nace con el oscilador en sobreventa y una SHORT con sobrecompra.")
@@ -384,9 +406,33 @@ type LiqLevel
     bool active
     bool isSR
     int lastTouch
+    label lb
 
 var array<LiqLevel> liqHigh = array.new<LiqLevel>()
 var array<LiqLevel> liqLow = array.new<LiqLevel>()
+
+f_near(float px) => srMaxATR <= 0 or (not na(px) and math.abs(px - close) <= atr * srMaxATR)
+
+f_hasLevel(array<LiqLevel> arr, float px) =>
+    bool found = false
+    if not na(px) and arr.size() > 0
+        for k = 0 to arr.size() - 1
+            LiqLevel q = arr.get(k)
+            if q.active and q.lvl == px
+                found := true
+    found
+
+f_dropOldest(array<LiqLevel> arr) =>
+    int idx = 0
+    for k = 0 to arr.size() - 1
+        if not arr.get(k).isSR
+            idx := k
+            break
+    LiqLevel old = arr.remove(idx)
+    if not na(old.ln)
+        line.delete(old.ln)
+    if not na(old.lb)
+        label.delete(old.lb)
 
 phLiq = ta.pivothigh(high, liqLen, liqLen)
 plLiq = ta.pivotlow(low, liqLen, liqLen)
@@ -400,11 +446,9 @@ if showLiq and not na(phLiq)
                 found := true
                 break
     if not found
-        liqHigh.push(LiqLevel.new(f_hLine(phLiq, liqCol, 1, 2), phLiq, 0, true, false, -1000))
+        liqHigh.push(LiqLevel.new(f_hLine(phLiq, liqCol, 1, 2), phLiq, 0, true, false, -1000, na))
         while liqHigh.size() > maxLiq
-            LiqLevel old = liqHigh.shift()
-            if not na(old.ln)
-                line.delete(old.ln)
+            f_dropOldest(liqHigh)
 
 if showLiq and not na(plLiq)
     found = false
@@ -415,11 +459,9 @@ if showLiq and not na(plLiq)
                 found := true
                 break
     if not found
-        liqLow.push(LiqLevel.new(f_hLine(plLiq, liqCol, 1, 2), plLiq, 0, true, false, -1000))
+        liqLow.push(LiqLevel.new(f_hLine(plLiq, liqCol, 1, 2), plLiq, 0, true, false, -1000, na))
         while liqLow.size() > maxLiq
-            LiqLevel old = liqLow.shift()
-            if not na(old.ln)
-                line.delete(old.ln)
+            f_dropOldest(liqLow)
 
 sweepBearNow = false
 sweepBullNow = false
@@ -434,9 +476,11 @@ while iH >= 0
             if lvl.touches >= srMin and not lvl.isSR
                 lvl.isSR := true
                 if not na(lvl.ln)
-                    line.set_color(lvl.ln, srCol)
+                    line.set_color(lvl.ln, resCol)
                     line.set_width(lvl.ln, 2)
                     line.set_style(lvl.ln, line.style_solid)
+                if showSRLabel and na(lvl.lb)
+                    lvl.lb := label.new(bar_index, lvl.lvl, "RESISTENCIA " + f_px(lvl.lvl), style=label.style_label_left, color=resCol, textcolor=color.white, size=lblSize)
         realSweepHigh = high > lvl.lvl + atr * liqTolATR and close < lvl.lvl
         brokeAboveHigh = close > lvl.lvl
         if realSweepHigh or brokeAboveHigh
@@ -446,6 +490,8 @@ while iH >= 0
             if not na(lvl.ln)
                 line.delete(lvl.ln)
                 lvl.ln := na
+            if not na(lvl.lb)
+                label.delete(lvl.lb)
             liqHigh.remove(iH)
     iH -= 1
 
@@ -459,9 +505,11 @@ while iL >= 0
             if lvl.touches >= srMin and not lvl.isSR
                 lvl.isSR := true
                 if not na(lvl.ln)
-                    line.set_color(lvl.ln, srCol)
+                    line.set_color(lvl.ln, supCol)
                     line.set_width(lvl.ln, 2)
                     line.set_style(lvl.ln, line.style_solid)
+                if showSRLabel and na(lvl.lb)
+                    lvl.lb := label.new(bar_index, lvl.lvl, "SOPORTE " + f_px(lvl.lvl), style=label.style_label_left, color=supCol, textcolor=color.white, size=lblSize)
         realSweepLow = low < lvl.lvl - atr * liqTolATR and close > lvl.lvl
         brokeBelowLow = close < lvl.lvl
         if realSweepLow or brokeBelowLow
@@ -471,6 +519,8 @@ while iL >= 0
             if not na(lvl.ln)
                 line.delete(lvl.ln)
                 lvl.ln := na
+            if not na(lvl.lb)
+                label.delete(lvl.lb)
             liqLow.remove(iL)
     iL -= 1
 
@@ -557,16 +607,193 @@ if barstate.islast
     if liqHint and not na(nearLow)
         posLongTag := label.new(bar_index, nearLow, "POSIBLE LONG · " + f_px(nearLow), style=label.style_label_left, color=color.green, textcolor=color.white, size=size.tiny)
 
-plot(barstate.islast and liqHigh.size() > 0 ? liqHigh.get(0).lvl : na, "💧 EQH 1", color=color.red, style=plot.style_linebr, linewidth=1)
-plot(barstate.islast and liqHigh.size() > 1 ? liqHigh.get(1).lvl : na, "💧 EQH 2", color=color.new(color.red, 40), style=plot.style_linebr, linewidth=1)
-plot(barstate.islast and liqHigh.size() > 2 ? liqHigh.get(2).lvl : na, "💧 EQH 3", color=color.new(color.red, 60), style=plot.style_linebr, linewidth=1)
-plot(barstate.islast and liqHigh.size() > 3 ? liqHigh.get(3).lvl : na, "💧 EQH 4", color=color.new(color.red, 75), style=plot.style_linebr, linewidth=1)
-plot(barstate.islast and liqLow.size() > 0 ? liqLow.get(0).lvl : na, "💧 EQL 1", color=color.green, style=plot.style_linebr, linewidth=1)
-plot(barstate.islast and liqLow.size() > 1 ? liqLow.get(1).lvl : na, "💧 EQL 2", color=color.new(color.green, 40), style=plot.style_linebr, linewidth=1)
-plot(barstate.islast and liqLow.size() > 2 ? liqLow.get(2).lvl : na, "💧 EQL 3", color=color.new(color.green, 60), style=plot.style_linebr, linewidth=1)
-plot(barstate.islast and liqLow.size() > 3 ? liqLow.get(3).lvl : na, "💧 EQL 4", color=color.new(color.green, 75), style=plot.style_linebr, linewidth=1)
+if barstate.islast
+    if liqHigh.size() > 0
+        for idx = 0 to liqHigh.size() - 1
+            LiqLevel q1 = liqHigh.get(idx)
+            bool near1 = f_near(q1.lvl)
+            if not na(q1.ln)
+                line.set_color(q1.ln, near1 ? (q1.isSR ? resCol : liqCol) : na)
+            if not na(q1.lb)
+                label.set_x(q1.lb, bar_index + 1)
+                label.set_color(q1.lb, near1 ? resCol : na)
+                label.set_textcolor(q1.lb, near1 ? color.white : na)
+    if liqLow.size() > 0
+        for idx = 0 to liqLow.size() - 1
+            LiqLevel q2 = liqLow.get(idx)
+            bool near2 = f_near(q2.lvl)
+            if not na(q2.ln)
+                line.set_color(q2.ln, near2 ? (q2.isSR ? supCol : liqCol) : na)
+            if not na(q2.lb)
+                label.set_x(q2.lb, bar_index + 1)
+                label.set_color(q2.lb, near2 ? supCol : na)
+                label.set_textcolor(q2.lb, near2 ? color.white : na)
+
+plot(barstate.islast and liqHigh.size() > 0 and f_near(liqHigh.get(0).lvl) ? liqHigh.get(0).lvl : na, "💧 EQH 1", color=color.red, style=plot.style_linebr, linewidth=1)
+plot(barstate.islast and liqHigh.size() > 1 and f_near(liqHigh.get(1).lvl) ? liqHigh.get(1).lvl : na, "💧 EQH 2", color=color.new(color.red, 40), style=plot.style_linebr, linewidth=1)
+plot(barstate.islast and liqHigh.size() > 2 and f_near(liqHigh.get(2).lvl) ? liqHigh.get(2).lvl : na, "💧 EQH 3", color=color.new(color.red, 60), style=plot.style_linebr, linewidth=1)
+plot(barstate.islast and liqHigh.size() > 3 and f_near(liqHigh.get(3).lvl) ? liqHigh.get(3).lvl : na, "💧 EQH 4", color=color.new(color.red, 75), style=plot.style_linebr, linewidth=1)
+plot(barstate.islast and liqLow.size() > 0 and f_near(liqLow.get(0).lvl) ? liqLow.get(0).lvl : na, "💧 EQL 1", color=color.green, style=plot.style_linebr, linewidth=1)
+plot(barstate.islast and liqLow.size() > 1 and f_near(liqLow.get(1).lvl) ? liqLow.get(1).lvl : na, "💧 EQL 2", color=color.new(color.green, 40), style=plot.style_linebr, linewidth=1)
+plot(barstate.islast and liqLow.size() > 2 and f_near(liqLow.get(2).lvl) ? liqLow.get(2).lvl : na, "💧 EQL 3", color=color.new(color.green, 60), style=plot.style_linebr, linewidth=1)
+plot(barstate.islast and liqLow.size() > 3 and f_near(liqLow.get(3).lvl) ? liqLow.get(3).lvl : na, "💧 EQL 4", color=color.new(color.green, 75), style=plot.style_linebr, linewidth=1)
 plot(barstate.islast and showLiq24 and not h24Swept and not na(h24p) ? h24p : na, "🕐 Liq 24h ↑", color=liq24Col, style=plot.style_linebr, linewidth=1)
 plot(barstate.islast and showLiq24 and not l24Swept and not na(l24p) ? l24p : na, "🕐 Liq 24h ↓", color=liq24Col, style=plot.style_linebr, linewidth=1)
+
+// ==================== LIQUIDEZ EXTERNA Y AUTOMÁTICA ====================
+var array<float>  pstPx = array.new<float>()
+var array<string> pstTp = array.new<string>()
+var array<string> pstTx = array.new<string>()
+var array<float>  pstAm = array.new<float>()
+var array<float>  extPx = array.new<float>()
+var array<string> extTp = array.new<string>()
+var array<string> extTx = array.new<string>()
+var array<float>  extAm = array.new<float>()
+
+if barstate.isfirst and showExt
+    array<string> extRows = str.split(extText, "\n")
+    for r = 0 to extRows.size() - 1
+        string row = str.trim(extRows.get(r))
+        if str.length(row) > 0 and not str.startswith(row, "#") and pstPx.size() < 40
+            array<string> parts = str.split(row, ";")
+            float pxv = str.tonumber(str.replace_all(str.trim(parts.get(0)), ",", "."))
+            if not na(pxv)
+                string rawTp = parts.size() > 1 ? str.upper(str.replace_all(str.trim(parts.get(1)), " ", "_")) : "NIVEL"
+                string tpe = str.contains(rawTp, "LIQ") and str.contains(rawTp, "LONG") ? "LIQ_LONG" : str.contains(rawTp, "LIQ") and str.contains(rawTp, "SHORT") ? "LIQ_SHORT" : str.startswith(rawTp, "SOP") ? "SOPORTE" : str.startswith(rawTp, "RES") ? "RESISTENCIA" : "NIVEL"
+                string txt = parts.size() > 2 ? str.trim(parts.get(2)) : ""
+                float amv = parts.size() > 3 ? str.tonumber(str.replace_all(str.trim(parts.get(3)), ",", ".")) : na
+                pstPx.push(pxv)
+                pstTp.push(tpe)
+                pstTx.push(txt)
+                pstAm.push(amv)
+    if pstPx.size() > 0
+        for k = 0 to pstPx.size() - 1
+            extPx.push(pstPx.get(k))
+            extTp.push(pstTp.get(k))
+            extTx.push(pstTx.get(k))
+            extAm.push(pstAm.get(k))
+
+f_addLv(float px, string tp, string tx, float am) =>
+    if not na(px)
+        extPx.push(px)
+        extTp.push(tp)
+        extTx.push(tx)
+        extAm.push(am)
+
+f_extName(int i) =>
+    string t = extTp.get(i)
+    string x = extTx.get(i)
+    x != "" ? x : t == "LIQ_LONG" ? "LIQ LARGOS" : t == "LIQ_SHORT" ? "LIQ CORTOS" : t
+
+// Liquidación externa pegada más cercana a un borde de zona, dentro del alcance (para proteger el SL).
+// Solo usa niveles pegados por el usuario; las liquidaciones estimadas no mueven el SL.
+f_extLevelNear(float zoneEdge, bool below) =>
+    float res = na
+    if extPx.size() > 0
+        for i = 0 to extPx.size() - 1
+            float plv = extPx.get(i)
+            string tlv = extTp.get(i)
+            if below and tlv == "LIQ_LONG" and plv < zoneEdge and plv >= zoneEdge - atr * extSlRange
+                if na(res) or plv > res
+                    res := plv
+            if not below and tlv == "LIQ_SHORT" and plv > zoneEdge and plv <= zoneEdge + atr * extSlRange
+                if na(res) or plv < res
+                    res := plv
+    res
+
+// Máximos y mínimos de períodos anteriores (cerrados, sin mirar al futuro)
+apdh = request.security(syminfo.tickerid, "D", high[1], lookahead=barmerge.lookahead_on)
+apdl = request.security(syminfo.tickerid, "D", low[1], lookahead=barmerge.lookahead_on)
+apwh = request.security(syminfo.tickerid, "W", high[1], lookahead=barmerge.lookahead_on)
+apwl = request.security(syminfo.tickerid, "W", low[1], lookahead=barmerge.lookahead_on)
+apmh = request.security(syminfo.tickerid, "M", high[1], lookahead=barmerge.lookahead_on)
+apml = request.security(syminfo.tickerid, "M", low[1], lookahead=barmerge.lookahead_on)
+
+// Último swing importante, base de las liquidaciones estimadas
+mjH = ta.pivothigh(high, estPivLen, estPivLen)
+mjL = ta.pivotlow(low, estPivLen, estPivLen)
+var float lastMajH = na
+var float lastMajL = na
+if not na(mjH)
+    lastMajH := mjH
+if not na(mjL)
+    lastMajL := mjL
+
+// En la última vela se reconstruye la lista: niveles pegados + automáticos
+if barstate.islast and showExt
+    extPx.clear()
+    extTp.clear()
+    extTx.clear()
+    extAm.clear()
+    if pstPx.size() > 0
+        for k = 0 to pstPx.size() - 1
+            f_addLv(pstPx.get(k), pstTp.get(k), pstTx.get(k), pstAm.get(k))
+    if showAuto
+        f_addLv(apdh, "PREV", "PDH", na)
+        f_addLv(apdl, "PREV", "PDL", na)
+        f_addLv(apwh, "PREV", "PWH", na)
+        f_addLv(apwl, "PREV", "PWL", na)
+        f_addLv(apmh, "PREV", "PMH", na)
+        f_addLv(apml, "PREV", "PML", na)
+    if showEst
+        array<int> estLevs = array.from(estLev1, estLev2, estLev3)
+        for k = 0 to 2
+            int lv = estLevs.get(k)
+            if not na(lastMajH)
+                float lq = lastMajH * (1 - 1.0 / lv)
+                if lq < close
+                    f_addLv(lq, "EST_LONG", "LIQ LARGOS ~" + str.tostring(lv) + "x est.", na)
+            if not na(lastMajL)
+                float sq = lastMajL * (1 + 1.0 / lv)
+                if sq > close
+                    f_addLv(sq, "EST_SHORT", "LIQ CORTOS ~" + str.tostring(lv) + "x est.", na)
+
+var array<line>  extLines = array.new<line>()
+var array<label> extLbls  = array.new<label>()
+if barstate.islast and showExt
+    while extLines.size() > 0
+        line.delete(extLines.pop())
+    while extLbls.size() > 0
+        label.delete(extLbls.pop())
+    float extMax = 0.0
+    if extAm.size() > 0
+        for i = 0 to extAm.size() - 1
+            if not na(extAm.get(i))
+                extMax := math.max(extMax, extAm.get(i))
+    if extPx.size() > 0
+        for i = 0 to extPx.size() - 1
+            float pe = extPx.get(i)
+            if f_near(pe)
+                string te = extTp.get(i)
+                float ae = extAm.get(i)
+                color ce = te == "LIQ_LONG" or te == "EST_LONG" ? extLongCol : te == "LIQ_SHORT" or te == "EST_SHORT" ? extShortCol : te == "SOPORTE" ? supCol : te == "RESISTENCIA" ? resCol : te == "PREV" ? color.new(color.silver, 10) : color.new(color.white, 20)
+                int we = extMax > 0 and not na(ae) ? 1 + math.round(ae / extMax * 3) : 1
+                int sty = te == "LIQ_LONG" or te == "LIQ_SHORT" ? 1 : te == "EST_LONG" or te == "EST_SHORT" or te == "PREV" ? 2 : 0
+                extLines.push(f_hLine(pe, ce, we, sty))
+                extLbls.push(label.new(bar_index + 1, pe, f_extName(i) + " " + f_px(pe) + (na(ae) ? "" : " · " + str.tostring(ae, "#.#") + "M"), style=label.style_label_left, color=color.new(ce, 15), textcolor=te == "LIQ_LONG" or te == "EST_LONG" or te == "PREV" ? color.black : color.white, size=lblSize))
+
+// Más cercana por encima y por debajo del precio (para el panel), solo entre las visibles
+int extUpIdx = -1
+int extDnIdx = -1
+if barstate.islast and showExt and extPx.size() > 0
+    float dUp = 1000000000.0
+    float dDn = 1000000000.0
+    for i = 0 to extPx.size() - 1
+        float pq = extPx.get(i)
+        if pq > close and pq - close < dUp and f_near(pq)
+            dUp := pq - close
+            extUpIdx := i
+        if pq <= close and close - pq < dDn and f_near(pq)
+            dDn := close - pq
+            extDnIdx := i
+
+// El precio tocó algún nivel (alerta)
+bool extTouch = false
+if showExt and extPx.size() > 0
+    for i = 0 to extPx.size() - 1
+        float pt = extPx.get(i)
+        if low <= pt and high >= pt
+            extTouch := true
 
 bsSweepBull = ta.barssince(sweepBullNow)
 bsSweepBear = ta.barssince(sweepBearNow)
@@ -611,6 +838,8 @@ type FZ
     float maxFill
     float vol
     float delta
+    bool touched
+    int born
 
 var array<FZ> fzs = array.new<FZ>()
 
@@ -917,18 +1146,33 @@ if showFVG and low > high[2]
     strengthTxtFB = rvolValFB >= rvolFuerte ? "FUERTE" : rvolValFB >= rvolModerado ? "MODERADO" : "DÉBIL"
     volValFB = volume[1] * hlc3[1]
     deltaValFB = (high[1] - low[1]) != 0 ? (close[1] - open[1]) / (high[1] - low[1]) * 100 : 0.0
-    fzs.push(FZ.new(box.new(bar_index - 2, low, extendUntilMit ? bar_index + 1 : bar_index + obExtendBars, high[2], bgcolor=showZoneInfoBox ? f_strengthCol(strengthTxtFB, true, 93) : fvgBullCol, border_width=0), low, high[2], true, false, rvolValFB, strengthTxtFB, 0.0, volValFB, deltaValFB))
+    fzs.push(FZ.new(box.new(bar_index - 2, low, extendUntilMit ? bar_index + 1 : bar_index + obExtendBars, high[2], bgcolor=showZoneInfoBox ? f_strengthCol(strengthTxtFB, true, 93) : fvgBullCol, border_width=0), low, high[2], true, false, rvolValFB, strengthTxtFB, 0.0, volValFB, deltaValFB, false, bar_index))
 if showFVG and high < low[2]
     rvolValFB = vMA[1] != 0 ? volume[1] / vMA[1] : 0.0
     strengthTxtFB = rvolValFB >= rvolFuerte ? "FUERTE" : rvolValFB >= rvolModerado ? "MODERADO" : "DÉBIL"
     volValFB = volume[1] * hlc3[1]
     deltaValFB = (high[1] - low[1]) != 0 ? (close[1] - open[1]) / (high[1] - low[1]) * 100 : 0.0
-    fzs.push(FZ.new(box.new(bar_index - 2, low[2], extendUntilMit ? bar_index + 1 : bar_index + obExtendBars, high, bgcolor=showZoneInfoBox ? f_strengthCol(strengthTxtFB, false, 93) : fvgBearCol, border_width=0), low[2], high, false, false, rvolValFB, strengthTxtFB, 0.0, volValFB, deltaValFB))
+    fzs.push(FZ.new(box.new(bar_index - 2, low[2], extendUntilMit ? bar_index + 1 : bar_index + obExtendBars, high, bgcolor=showZoneInfoBox ? f_strengthCol(strengthTxtFB, false, 93) : fvgBearCol, border_width=0), low[2], high, false, false, rvolValFB, strengthTxtFB, 0.0, volValFB, deltaValFB, false, bar_index))
 
 j = fzs.size() - 1
 while j >= 0
     FZ f = fzs.get(j)
     mit = f.bull ? low <= f.bot : high >= f.top
+    enterF = f.bull ? low <= f.top : high >= f.bot
+    if fvgSignals and enterF and not f.touched and bar_index > f.born
+        fStrOK = not requireZoneStrength or f.strength != "DÉBIL"
+        fDomOK = not requireDomOK or (f.bull ? f.delta > -domTh : f.delta < domTh)
+        fRejOK = not requireReject or (f.bull ? (close > open and close >= f.bot) : (close < open and close <= f.top))
+        if not fStrOK or not fDomOK
+            f.touched := true
+        else if fRejOK
+            f.touched := true
+            if f.bull and not bullTouch
+                bullTouch := true
+                bullBot := f.bot
+            if not f.bull and not bearTouch
+                bearTouch := true
+                bearTop := f.top
     if mit and not f.mit
         f.mit := true
         if showPB and not pbNow
@@ -1086,7 +1330,7 @@ if barstate.islast
                         box.set_text(bxR, tx)
                         box.set_text_color(bxR, color.white)
                         box.set_text_size(bxR, size.small)
-                        box.set_text_halign(bxR, text.align_center)
+                        box.set_text_halign(bxR, text.align_right)
                         box.set_text_valign(bxR, text.align_center)
                     if showTips
                         infoLbls.push(label.new(bar_index + 1, midP, "ⓘ", style=label.style_label_left, color=cc, textcolor=color.white, size=size.small, tooltip=tp))
@@ -1289,8 +1533,20 @@ linkActive = useOscLink and linkValid
 linkLongOK  = not linkActive or (srcOscScoreL >= minLinkScore and (not requireOscSig or oscSigRecL))
 linkShortOK = not linkActive or (srcOscScoreS >= minLinkScore and (not requireOscSig or oscSigRecS))
 
-bullSig = tDir == 0 and bullTouch and (not useCombined or oscOS) and exhBullOK and adxOK and htfBullOK and ctxLongOK and sweepOKBull and sessOK and linkLongOK
-bearSig = tDir == 0 and bearTouch and (not useCombined or oscOB) and exhBearOK and adxOK and htfBearOK and ctxShortOK and sweepOKBear and sessOK and linkShortOK
+bullSig = tDir == 0 and bullTouch and (not useCombined or linkActive or oscOS) and exhBullOK and adxOK and htfBullOK and ctxLongOK and sweepOKBull and sessOK and linkLongOK
+bearSig = tDir == 0 and bearTouch and (not useCombined or linkActive or oscOB) and exhBearOK and adxOK and htfBearOK and ctxShortOK and sweepOKBear and sessOK and linkShortOK
+
+// Por qué una zona tocada no dio señal
+string whyBull = ""
+string whyBear = ""
+if showWhy and bullTouch and not bullSig
+    whyBull := (tDir != 0 ? "operación-abierta " : "") + (useCombined and not linkActive and not oscOS ? "oscilador " : "") + (not exhBullOK ? "agotamiento " : "") + (not adxOK ? "ADX " : "") + (not htfBullOK ? "sesgo-HTF " : "") + (not ctxLongOK ? "contexto " : "") + (not sweepOKBull ? "barrido " : "") + (not sessOK ? "sesión " : "") + (not linkLongOK ? "puntaje-osc " : "")
+if showWhy and bearTouch and not bearSig
+    whyBear := (tDir != 0 ? "operación-abierta " : "") + (useCombined and not linkActive and not oscOB ? "oscilador " : "") + (not exhBearOK ? "agotamiento " : "") + (not adxOK ? "ADX " : "") + (not htfBearOK ? "sesgo-HTF " : "") + (not ctxShortOK ? "contexto " : "") + (not sweepOKBear ? "barrido " : "") + (not sessOK ? "sesión " : "") + (not linkShortOK ? "puntaje-osc " : "")
+if whyBull != ""
+    label.new(bar_index, low, "LONG ⛔ " + whyBull, style=label.style_label_up, color=color.new(color.gray, 25), textcolor=color.white, size=size.tiny)
+if whyBear != ""
+    label.new(bar_index, high, "SHORT ⛔ " + whyBear, style=label.style_label_down, color=color.new(color.gray, 25), textcolor=color.white, size=size.tiny)
 
 if bullSig
     tDir := 1
@@ -1299,6 +1555,9 @@ if bullSig
     tEntry := close
     tBE := false
     rawSL = bullBot - atr * slBuffer
+    extLq = extUseSL and barstate.isrealtime ? f_extLevelNear(bullBot, true) : na
+    if not na(extLq)
+        rawSL := math.min(rawSL, extLq - atr * slBuffer)
     tSL := math.min(rawSL, tEntry - atr * minSLatr)
     tRisk := tEntry - tSL
     tTP := tEntry + tRisk * rr
@@ -1313,6 +1572,9 @@ if bearSig
     tEntry := close
     tBE := false
     rawSL = bearTop + atr * slBuffer
+    extLq = extUseSL and barstate.isrealtime ? f_extLevelNear(bearTop, false) : na
+    if not na(extLq)
+        rawSL := math.max(rawSL, extLq + atr * slBuffer)
     tSL := math.max(rawSL, tEntry + atr * minSLatr)
     tRisk := tSL - tEntry
     tTP := tEntry - tRisk * rr
@@ -1581,12 +1843,26 @@ if showEntryPanel and barstate.islast
     deltaTxtP = (deltaPct >= 0 ? "+" : "") + str.tostring(deltaPct, "#.#") + "% vs 0"
     deltaColP = deltaPct >= 0 ? color.green : color.red
 
-    liqHighTxt = na(nearHigh) ? "—" : f_px(nearHigh) + " · SHORT"
+    nhEq = f_hasLevel(liqHigh, nearHigh)
+    nh24 = showLiq24 and not h24Swept and not na(h24p) and h24p == nearHigh
+    nhSrc = nhEq and nh24 ? "EQH+24h" : nhEq ? "EQH" : nh24 ? "24h" : ""
+    nlEq = f_hasLevel(liqLow, nearLow)
+    nl24 = showLiq24 and not l24Swept and not na(l24p) and l24p == nearLow
+    nlSrc = nlEq and nl24 ? "EQL+24h" : nlEq ? "EQL" : nl24 ? "24h" : ""
+    liqHighTxt = na(nearHigh) ? "—" : f_px(nearHigh) + " · " + nhSrc + " · SHORT"
     liqHighCol = na(nearHigh) ? color.gray : color.red
-    liqLowTxt = na(nearLow) ? "—" : f_px(nearLow) + " · LONG"
+    liqLowTxt = na(nearLow) ? "—" : f_px(nearLow) + " · " + nlSrc + " · LONG"
     liqLowCol = na(nearLow) ? color.gray : color.green
-    h24Txt = not showLiq24 or na(h24p) ? "—" : h24Swept ? "✅ LIQUIDEZ ABSORBIDA" : f_px(h24p) + " · ⏳ PENDIENTE"
-    l24Txt = not showLiq24 or na(l24p) ? "—" : l24Swept ? "✅ LIQUIDEZ ABSORBIDA" : f_px(l24p) + " · ⏳ PENDIENTE"
+    h24Part = not showLiq24 or na(h24p) ? "Máx —" : h24Swept ? "Máx ✅ absorbida" : "Máx ⏳" + (h24p == nearHigh ? "" : " " + f_px(h24p))
+    l24Part = not showLiq24 or na(l24p) ? "Mín —" : l24Swept ? "Mín ✅ absorbida" : "Mín ⏳" + (l24p == nearLow ? "" : " " + f_px(l24p))
+    liq24Txt = h24Part + " · " + l24Part
+    h24On = showLiq24 and not na(h24p)
+    l24On = showLiq24 and not na(l24p)
+    liq24Col = not h24On and not l24On ? color.gray : (not h24On or h24Swept) and (not l24On or l24Swept) ? color.green : color.orange
+    extUpTxt = not showExt or extPx.size() == 0 or extUpIdx < 0 ? "—" : f_px(extPx.get(extUpIdx)) + " · " + f_extName(extUpIdx) + " · " + str.tostring((extPx.get(extUpIdx) - close) / atr, "#.#") + " ATR"
+    extDnTxt = not showExt or extPx.size() == 0 or extDnIdx < 0 ? "—" : f_px(extPx.get(extDnIdx)) + " · " + f_extName(extDnIdx) + " · " + str.tostring((close - extPx.get(extDnIdx)) / atr, "#.#") + " ATR"
+    extAllTxt = not showExt or extPx.size() == 0 ? "—" : "↑ " + extUpTxt + "\n↓ " + extDnTxt
+    extAllCol = extUpIdx < 0 and extDnIdx < 0 ? color.gray : color.white
 
     pctTP = tDir == 1 ? (tpAct - close) / close * 100 : tDir == -1 ? (close - tpAct) / close * 100 : 0.0
     table.cell(et, 0, 0, "ESTADO", text_color=color.white, text_size=txtSz)
@@ -1603,15 +1879,15 @@ if showEntryPanel and barstate.islast
     table.cell(et, 1, 5, diTxt, text_color=diCol, text_size=txtSz)
     table.cell(et, 0, 6, "DELTA", text_color=color.gray, text_size=txtSz)
     table.cell(et, 1, 6, deltaTxtP, text_color=deltaColP, text_size=txtSz)
-    table.cell(et, 0, 7, "💧 Liq ↑ (EQH)", text_color=color.gray, text_size=txtSz)
+    table.cell(et, 0, 7, "💧 Liq ↑", text_color=color.gray, text_size=txtSz)
     table.cell(et, 1, 7, liqHighTxt, text_color=liqHighCol, text_size=txtSz)
-    table.cell(et, 0, 8, "💧 Liq ↓ (EQL)", text_color=color.gray, text_size=txtSz)
+    table.cell(et, 0, 8, "💧 Liq ↓", text_color=color.gray, text_size=txtSz)
     table.cell(et, 1, 8, liqLowTxt, text_color=liqLowCol, text_size=txtSz)
-    table.cell(et, 0, 9, "🕐 Liq 24h ↑", text_color=color.gray, text_size=txtSz)
-    table.cell(et, 1, 9, h24Txt, text_color=not showLiq24 or na(h24p) ? color.gray : h24Swept ? color.green : color.orange, text_size=txtSz)
-    table.cell(et, 0, 10, "🕐 Liq 24h ↓", text_color=color.gray, text_size=txtSz)
-    table.cell(et, 1, 10, l24Txt, text_color=not showLiq24 or na(l24p) ? color.gray : l24Swept ? color.green : color.orange, text_size=txtSz)
-    domTxtP = curZoneStrength == "" ? "—" : curZoneDom + " · integridad " + str.tostring(curZoneInteg, "#") + "%"
+    table.cell(et, 0, 9, "🕐 Liq 24h", text_color=color.gray, text_size=txtSz)
+    table.cell(et, 1, 9, liq24Txt, text_color=liq24Col, text_size=txtSz)
+    table.cell(et, 0, 10, "🌊 Liq externa", text_color=color.gray, text_size=txtSz)
+    table.cell(et, 1, 10, extAllTxt, text_color=extAllCol, text_size=txtSz)
+    domTxtP = curZoneStrength == "" ? "Sin OB cerca" : curZoneDom + " · integridad " + str.tostring(curZoneInteg, "#") + "%"
     domColP = curZoneDom == "COMPRADORES" ? color.green : curZoneDom == "VENDEDORES" ? color.red : color.gray
     table.cell(et, 0, 11, "Dominancia OB", text_color=color.gray, text_size=txtSz)
     table.cell(et, 1, 11, domTxtP, text_color=domColP, text_size=txtSz)
@@ -1660,3 +1936,4 @@ alertcondition(tStage == 3 and tStage[1] == 2, "TP2 tocado", "✅ TP2 tocado · 
 alertcondition(sTP3 != sTP3[1], "TP3 completado", "🏆 TP3 completado · {{ticker}}")
 alertcondition(bosUp, "BOS Alcista", "⬆️ BOS alcista · {{ticker}}")
 alertcondition(bosDn, "BOS Bajista", "⬇️ BOS bajista · {{ticker}}")
+alertcondition(extTouch, "Precio toca liquidez externa", "🌊 El precio tocó un nivel de liquidez externa · {{ticker}} · {{interval}}")
