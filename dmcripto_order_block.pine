@@ -178,7 +178,7 @@ szStruct = input.string("Pequeño", "Estructura BOS / CHoCH", options=["Oculto",
 szWhy    = input.string("Pequeño", "Avisos «tocó zona pero no es señal» (✖ falta: ...)", options=["Oculto", "Muy pequeño", "Pequeño", "Normal", "Grande"], group=grpSz, tooltip="Naranja con texto negro para que se lea bien. Dice en palabras simples qué filtro falta. Pasa el mouse para ver el detalle.")
 szPos    = input.string("Muy pequeño", "POSIBLE LONG / SHORT", options=["Oculto", "Muy pequeño", "Pequeño", "Normal", "Grande"], group=grpSz)
 lblShort = input.bool(true, "Texto corto en liquidaciones (sin '~' ni 'est.')", group=grpSz)
-lblIcons = input.bool(true, "Etiquetas con iconos y palabras simples (en vez de siglas PDH / PWH / LIQ / POC)", group=grpSz, tooltip="ON: 📅 Máx. de ayer, 📆 Mín. semana ant., ⬆💥 Liq. cortos 25x, 🎯 POC... y al pasar el mouse sobre la etiqueta se explica qué significa. OFF: siglas técnicas.")
+lblIcons = input.bool(true, "Etiquetas con iconos y palabras simples (en vez de siglas PDH / PWH / LIQ / POC)", group=grpSz, tooltip="ON: 📅 Máx. de ayer, 📆 Mín. semana, ⬆💥 Cortos 25x (liquidación de cortos), 🎯 POC... y al pasar el mouse sobre la etiqueta se explica qué significa. OFF: siglas técnicas.")
 
 f_sz(string s) => s == "Muy pequeño" ? size.tiny : s == "Pequeño" ? size.small : s == "Normal" ? size.normal : size.large
 f_hf(string s) => s == "Muy pequeño" ? 0.7 : s == "Pequeño" ? 1.0 : s == "Normal" ? 1.35 : 1.8
@@ -744,9 +744,9 @@ f_extName(int i) =>
     x != "" ? x : t == "LIQ_LONG" ? "LIQ LARGOS" : t == "LIQ_SHORT" ? "LIQ CORTOS" : t
 
 f_friendlyLbl(string n) =>
-    string r = n == "PDH" ? "📅 Máx. de ayer" : n == "PDL" ? "📅 Mín. de ayer" : n == "PWH" ? "📆 Máx. semana ant." : n == "PWL" ? "📆 Mín. semana ant." : n == "PMH" ? "🗓 Máx. mes ant." : n == "PML" ? "🗓 Mín. mes ant." : n
-    r := str.replace_all(r, "LIQ CORTOS", "⬆💥 Liq. cortos")
-    r := str.replace_all(r, "LIQ LARGOS", "⬇💥 Liq. largos")
+    string r = n == "PDH" ? "📅 Máx. de ayer" : n == "PDL" ? "📅 Mín. de ayer" : n == "PWH" ? "📆 Máx. semana" : n == "PWL" ? "📆 Mín. semana" : n == "PMH" ? "🗓 Máx. mes" : n == "PML" ? "🗓 Mín. mes" : n
+    r := str.replace_all(r, "LIQ CORTOS", "⬆💥 Cortos")
+    r := str.replace_all(r, "LIQ LARGOS", "⬇💥 Largos")
     r
 
 f_lvlTip(string n) =>
@@ -2071,7 +2071,7 @@ if barstate.islast and showVP and not na(rgStart)
         vpLines.push(line.new(vpStart, vpVah, bar_index + 1, vpVah, color=color.new(color.gray, 35), style=line.style_dotted, width=1))
         vpLines.push(line.new(vpStart, vpVal, bar_index + 1, vpVal, color=color.new(color.gray, 35), style=line.style_dotted, width=1))
         if szPoc != "Oculto"
-            vpPocLbl := label.new(bar_index + 1, vpPoc, (lblIcons ? "🎯 POC · más negociado " : "POC ") + f_px(vpPoc), style=label.style_label_left, color=color.new(color.yellow, 15), textcolor=color.black, size=f_sz(szPoc), tooltip="POC: el precio donde más se negoció en el rango. Sobre el POC el mercado está alcista; bajo el POC, bajista. Entre VAL y VAH está la zona de valor (donde se concentró el " + str.tostring(vpVA) + "% del volumen).")
+            vpPocLbl := label.new(bar_index + 1, vpPoc, (lblIcons ? "🎯 POC " : "POC ") + f_px(vpPoc), style=label.style_label_left, color=color.new(color.yellow, 15), textcolor=color.black, size=f_sz(szPoc), tooltip="POC: el precio donde más se negoció en el rango. Sobre el POC el mercado está alcista; bajo el POC, bajista. Entre VAL y VAH está la zona de valor (donde se concentró el " + str.tostring(vpVA) + "% del volumen).")
 
 if showEntryPanel and barstate.islast
     var table et = na
