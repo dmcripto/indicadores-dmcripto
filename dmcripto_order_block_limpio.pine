@@ -56,6 +56,7 @@ vpVA        = input.int(70, "Zona de valor (% del volumen)", minval=50, maxval=9
 vpDelta     = input.bool(true, "Colorear por quién dominó (verde compradores / rojo vendedores)", group=grpVP, tooltip="Aproxima el delta de cada fila con la posición del cierre dentro de cada vela.")
 structKeep  = input.int(6, "Cuántas rupturas de estructura dejar dibujadas (BOS/CHoCH/iBOS/iCHoCH)", minval=2, maxval=30, group=grpTidy, tooltip="Solo se conservan las últimas para no llenar el gráfico.")
 lvlLineBack = input.int(30, "Líneas de niveles: cuántas velas hacia atrás se dibujan (terminan en su etiqueta)", minval=0, maxval=200, group=grpTidy, tooltip="Las líneas punteadas de niveles (PDH, PWH, liquidaciones...) ya no cruzan todo el gráfico hasta el precio: empiezan unas velas atrás y terminan en su etiqueta. 0 = solo desde la última vela.")
+hideMitPrev = input.bool(true, "Borrar niveles previos (máx./mín. de ayer, semana, mes) cuando el precio ya los tocó", group=grpTidy, tooltip="Un nivel tocado ya no es liquidez pendiente: su etiqueta y su línea desaparecen para no llenar el gráfico. Apágalo si quieres ver siempre todos.")
 showHHLL    = input.bool(true, "Marcar HH / HL / LH / LL en los pivotes", group=grpTidy, tooltip="HH = máximo más alto, HL = mínimo más alto (tendencia alcista); LH = máximo más bajo, LL = mínimo más bajo (tendencia bajista).")
 showPDZ     = input.bool(true, "Zonas Premium (caro) y Discount (barato) del último rango", group=grpTidy, tooltip="Franja roja arriba del rango (zona cara para comprar, buena para vender) y verde abajo (zona barata para comprar).")
 pdZonePct   = input.int(8, "Alto de las zonas Premium/Discount (% del rango)", minval=3, maxval=30, group=grpTidy)
@@ -797,6 +798,13 @@ apwh = request.security(syminfo.tickerid, "W", high[1], lookahead=barmerge.looka
 apwl = request.security(syminfo.tickerid, "W", low[1], lookahead=barmerge.lookahead_on)
 apmh = request.security(syminfo.tickerid, "M", high[1], lookahead=barmerge.lookahead_on)
 apml = request.security(syminfo.tickerid, "M", low[1], lookahead=barmerge.lookahead_on)
+// Máximo y mínimo del período en curso (para saber si el nivel previo ya fue tocado)
+cdhV = request.security(syminfo.tickerid, "D", high)
+cdlV = request.security(syminfo.tickerid, "D", low)
+cwhV = request.security(syminfo.tickerid, "W", high)
+cwlV = request.security(syminfo.tickerid, "W", low)
+cmhV = request.security(syminfo.tickerid, "M", high)
+cmlV = request.security(syminfo.tickerid, "M", low)
 
 // Último swing importante, base de las liquidaciones estimadas
 mjH = ta.pivothigh(high, estPivLen, estPivLen)
@@ -818,12 +826,18 @@ if barstate.islast and showExt
         for k = 0 to pstPx.size() - 1
             f_addLv(pstPx.get(k), pstTp.get(k), pstTx.get(k), pstAm.get(k))
     if showAuto
-        f_addLv(apdh, "PREV", "PDH", na)
-        f_addLv(apdl, "PREV", "PDL", na)
-        f_addLv(apwh, "PREV", "PWH", na)
-        f_addLv(apwl, "PREV", "PWL", na)
-        f_addLv(apmh, "PREV", "PMH", na)
-        f_addLv(apml, "PREV", "PML", na)
+        if not hideMitPrev or not (cdhV >= apdh)
+            f_addLv(apdh, "PREV", "PDH", na)
+        if not hideMitPrev or not (cdlV <= apdl)
+            f_addLv(apdl, "PREV", "PDL", na)
+        if not hideMitPrev or not (cwhV >= apwh)
+            f_addLv(apwh, "PREV", "PWH", na)
+        if not hideMitPrev or not (cwlV <= apwl)
+            f_addLv(apwl, "PREV", "PWL", na)
+        if not hideMitPrev or not (cmhV >= apmh)
+            f_addLv(apmh, "PREV", "PMH", na)
+        if not hideMitPrev or not (cmlV <= apml)
+            f_addLv(apml, "PREV", "PML", na)
     if showEst
         array<int> estLevs = array.from(estLev1, estLev2, estLev3)
         for k = 0 to 2
@@ -2272,6 +2286,12 @@ f_spread(array<label> ls, array<label> comp, array<float> hf, int xOff, int comp
             prevBot := yy - hh / 2
 
 if barstate.islast and tidyRight
+    if hideMitPrev and not na(pdhT) and cdhV >= pdh
+        label.delete(pdhT)
+        pdhT := na
+    if hideMitPrev and not na(pdlT) and cdlV <= pdl
+        label.delete(pdlT)
+        pdlT := na
     rowUnitG := rowGapATR * atr
     if tidyAuto
         float visHi = high
