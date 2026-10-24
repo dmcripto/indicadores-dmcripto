@@ -434,6 +434,31 @@ plot(bullSig ? 1 : bearSig ? -1 : 0, "Señal (+1 LONG / -1 SHORT)", display=disp
 plot(scoreL, "Puntaje LONG", display=display.data_window)
 plot(scoreS, "Puntaje SHORT", display=display.data_window)
 
+// ------------------- ORDEN DE ETIQUETAS DEL BORDE DERECHO -------------------
+// Agotamiento, rotura de directriz y ADX salen juntos en las últimas velas: se separan en vertical para que no se pisen.
+if barstate.islast
+    array<label> rl = array.new<label>()
+    if not na(lastExhLbl) and label.get_x(lastExhLbl) >= bar_index - 12
+        rl.push(lastExhLbl)
+    if not na(lastBreakLbl) and label.get_x(lastBreakLbl) >= bar_index - 12
+        rl.push(lastBreakLbl)
+    if not na(adxLb)
+        rl.push(adxLb)
+    int rn = rl.size()
+    if rn > 1
+        array<float> ry = array.new<float>()
+        for i = 0 to rn - 1
+            ry.push(label.get_y(rl.get(i)))
+        array<int> rord = ry.sort_indices(order.descending)
+        float rPrev = na
+        for k = 0 to rn - 1
+            label rlb = rl.get(rord.get(k))
+            float rYy = ry.get(rord.get(k))
+            if not na(rPrev) and rYy > rPrev - 9
+                rYy := rPrev - 9
+            label.set_y(rlb, rYy)
+            rPrev := rYy
+
 // ------------------- MINI-PANEL -------------------
 if showOscPanel and barstate.islast
     var table op = na
