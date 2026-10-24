@@ -1,0 +1,1939 @@
+//@version=6
+indicator("DMCRIPTO ORDER BLOCK V3.0", shorttitle="DMOB V3", overlay=true, max_boxes_count=500, max_lines_count=300, max_labels_count=500, max_bars_back=1000)
+
+// ------------------- MODO MÓVIL -------------------
+grpMob = "📱 Modo Móvil"
+mobileMode = input.bool(false, "Modo Móvil (adaptar tamaños y carga)", group=grpMob)
+
+// ------------------- LIMPIEZA -------------------
+grpClean = "🧹 Limpieza Visual"
+masterClean   = input.bool(true, "Modo gráfico limpio", group=grpClean)
+showBOSLabels = input.bool(false, "Mostrar etiquetas BOS/CHoCH", group=grpClean)
+delBreakers   = input.bool(true, "Borrar breakers después de tocados", group=grpClean, tooltip="Cuando un breaker (OB roto) es tocado, se elimina del gráfico en lugar de quedarse para siempre.")
+showWhales    = input.bool(true, "Colorear velas ballena (volumen inusual)", group=grpClean, tooltip="Pinta la vela de amarillo fluor si el volumen inusual es alcista, o fucsia si es bajista. Sin triángulos ni etiquetas.")
+whaleLen      = input.int(20, "Período promedio de volumen (ballenas)", minval=5, maxval=100, group=grpClean)
+whaleMult     = input.float(2.5, "Múltiplo de volumen inusual", minval=1.2, step=0.1, group=grpClean)
+whaleBuyColor = input.color(#CCFF00, "Color ballena alcista (amarillo fluor)", group=grpClean)
+whaleSellColor = input.color(#FF00FF, "Color ballena bajista (fucsia)", group=grpClean)
+whaleLookback = input.int(5, "Velas hacia atrás para contar ballena como confluencia", minval=1, maxval=20, group=grpClean, tooltip="Si hubo una vela ballena en las últimas X velas y el precio está cerca/en una zona, el panel marca SETUP A+.")
+hideMitigated = input.bool(true, "Ocultar zonas consumidas", group=grpClean)
+
+// ------------------- DETECCIÓN -------------------
+grpDetect = "📦 Zonas (OB / FVG)"
+swingLen     = input.int(5, "Longitud del pivote", minval=1, group=grpDetect)
+lookback     = input.int(50, "Barras para buscar vela origen", minval=5, maxval=400, group=grpDetect)
+showOB       = input.bool(true, "Mostrar Order Blocks", group=grpDetect)
+maxOBsInput  = input.int(4, "Máx. Order Blocks simultáneos", minval=1, maxval=10, group=grpDetect, tooltip="Reducido por defecto (4) para evitar que muchas cajas se superpongan y saturen el gráfico.")
+maxFZsInput  = input.int(6, "Máx. FVG simultáneos", minval=1, maxval=20, group=grpDetect, tooltip="Reducido por defecto (6) para evitar que muchas cajas se superpongan y saturen el gráfico.")
+clusterATR = input.float(1.0, "Agrupar zonas más cerca que (x ATR) en una sola tarjeta", minval=0.5, step=0.5, group=grpDetect, tooltip="Si varias zonas están a menos de esta distancia entre sí (o se solapan), solo la más importante (OB antes que FVG) muestra tarjeta.")
+cardMinATR = input.float(1.2, "Alto mínimo de caja para texto dentro (x ATR)", minval=0.3, step=0.1, group=grpDetect, tooltip="Si la caja de la zona mide entre este mínimo y el máximo, la tarjeta se escribe DENTRO de la caja. Si es más chica (el texto no entra) o más grande (el texto queda fuera de pantalla y el relleno tapa las velas), la tarjeta se dibuja a la derecha del precio.")
+cardMaxATR = input.float(3.0, "Alto máximo de caja para texto dentro (x ATR)", minval=1.0, step=0.5, group=grpDetect, tooltip="Cajas más altas que esto no se rellenan con color fuerte ni llevan texto dentro: su tarjeta va a la derecha del precio.")
+cardNearATR = input.float(3.0, "Zonas más cerca del precio que esto (x ATR) usan tarjeta lateral", minval=0.0, step=0.5, group=grpDetect, tooltip="Cerca del precio se amontonan velas y etiquetas (PREMIUM, POSIBLE LONG/SHORT) y taparían el texto dentro de la caja. Las zonas a menos de esta distancia del precio muestran su tarjeta a la derecha; las más lejanas la llevan dentro de la caja.")
+infoLblOffset = input.int(9, "Distancia de la tarjeta lateral a la derecha (velas)", minval=1, maxval=60, group=grpDetect, tooltip="Solo para zonas chicas, muy grandes o pegadas al precio: cuántas velas a la derecha de la última vela se dibuja la tarjeta. 9 la deja después de las etiquetas POSIBLE LONG/SHORT. Si algo la tapa, bajá o subí este número.")
+showInstTag  = input.bool(true, "Marcar OB institucionales con 🐋", group=grpDetect, tooltip="Institucional = la vela origen de la zona tuvo volumen inusual (ballena). Se marca con etiqueta 🐋 y color más vívido.")
+instBorder   = input.bool(true, "Resaltar OB institucionales con color más vívido", group=grpDetect)
+showBreakers = input.bool(true, "Mostrar Breakers", group=grpDetect)
+showBRLabel  = input.bool(true, "Etiqueta 'BR' en breakers", group=grpDetect, tooltip="Cuando un OB se rompe y pasa a ser breaker, se marca con la etiqueta BR y borde punteado para diferenciarlo de un OB fresco.")
+showFVG      = input.bool(true, "Mostrar FVG", group=grpDetect)
+extendUntilMit = input.bool(true, "Extender zonas hasta ser mitigadas", group=grpDetect, tooltip="ESTÁNDAR SMC: las cajas de OB/FVG crecen vela a vela hasta que el precio las mitiga (la zona vive mientras no se toque). Al mitigarse se borran o se congelan como historial. Si lo apagas, usan la extensión fija de barras.")
+showPB       = input.bool(true, "Marcar pullbacks a zonas (PB)", group=grpDetect, tooltip="RECOMENDADO ON: cuando el precio entra por primera vez a un OB o FVG activo se marca PB (máx. 1 por vela). Es la marca visual del momento de toque. Apágalo cuando ya lo leas de memoria o en scalping 1-5m.")
+showSweepTag = input.bool(false, "Mostrar etiqueta 💧 en barridos de liquidez", group=grpDetect, tooltip="Marca con 💧 la vela que barre liquidez. Desactivado por defecto para limpieza; las alertas de barrido siguen funcionando igual.")
+obExtendBars = input.int(50, "Extensión fija (solo si apagas 'extender')", minval=5, group=grpDetect)
+useATRFilter = input.bool(true, "Tamaño mínimo vela origen (ATR)", group=grpDetect)
+atrLen       = input.int(14, "Longitud ATR", group=grpDetect)
+useAutoATRMult = input.bool(true, "Filtro de calidad de zona automático (según timeframe)", group=grpDetect, tooltip="ON por defecto: exige velas origen más grandes (más selectivo) en 1-5m, donde hay más ruido, y menos exigente en 15m.")
+minATRMultManual = input.float(0.5, "Mínimo x ATR (manual)", minval=0.05, step=0.05, group=grpDetect, tooltip="Solo se usa si el filtro automático está OFF.")
+tfSecEarly = timeframe.in_seconds()
+minATRMultAuto = tfSecEarly <= 180 ? 0.8 : tfSecEarly <= 300 ? 0.7 : tfSecEarly <= 900 ? 0.6 : 0.5
+minATRMult = useAutoATRMult ? minATRMultAuto : minATRMultManual
+nearMult     = input.float(1.0, "Avisar 'ZONA CERCA' a esta distancia (x ATR)", minval=0.25, step=0.25, group=grpDetect, tooltip="Cuando el precio queda a esta distancia (en ATRs) de una zona activa, el panel te avisa indicando el tipo de zona.")
+showZoneStrength = input.bool(true, "Clasificar fuerza de zona (Débil/Moderado/Fuerte)", group=grpDetect, tooltip="Clasifica cada Order Block según el volumen relativo (RVOL) de su vela origen. Se muestra en el panel, sin añadir etiquetas nuevas al gráfico.")
+rvolFuerte = input.float(2.0, "RVOL mínimo para FUERTE", minval=1.0, step=0.1, group=grpDetect)
+rvolModerado = input.float(1.0, "RVOL mínimo para MODERADO", minval=0.1, step=0.1, group=grpDetect)
+requireZoneStrength = input.bool(false, "Exigir fuerza mínima (MODERADO+) para señal", group=grpDetect, tooltip="OFF por defecto: pruébalo antes de activarlo. Si se activa, una señal LONG/SHORT solo nace si el Order Block tocado tiene RVOL Moderado o Fuerte (descarta toques en zonas DÉBILES con poco volumen real detrás). Solo afecta a OB: los FVG son informativos y no generan señales por sí solos.")
+showZoneInfoBox = input.bool(true, "Colorear OB/FVG según fuerza (Débil/Moderado/Fuerte)", group=grpDetect, tooltip="Pinta la caja de cada OB/FVG según su fuerza: gris=DÉBIL, naranja=MODERADO, verde/rojo=FUERTE (alcista/bajista). Azul/morado = breaker.")
+showInternalStruct = input.bool(true, "Mostrar estructura interna (iBOS/iCHoCH)", group=grpDetect, tooltip="Marca rupturas de estructura menores (internas) dentro de la tendencia principal, usando un pivote más corto. Solo se muestra la última etiqueta para no saturar el gráfico.")
+internalSwingLen = input.int(3, "Longitud pivote interno (iBOS/iCHoCH)", minval=1, group=grpDetect)
+
+// ==================== 🧠 SMART MONEY + VOLUMEN (mejoras) ====================
+grpSM = "🧠 Smart Money + Volumen"
+obLegOnly     = input.bool(true, "Buscar la vela origen solo en el tramo del impulso", group=grpSM, tooltip="ON: el OB se busca entre el último pivote y la ruptura (la vela que realmente originó el movimiento), no en las últimas N velas. Menos OB viejos y menos ruido. OFF: comportamiento anterior.")
+swingBigLen   = input.int(25, "Longitud del pivote SWING (OB swing)", minval=5, group=grpSM, tooltip="Un OB es SWING cuando su ruptura también rompe un pivote de esta longitud (ruptura importante, entran los grandes actores). Se marca con SWING y borde grueso.")
+domTh         = input.float(10.0, "Dominancia neutral si |Δ| menor a (%)", minval=0.0, step=1.0, group=grpSM, tooltip="Δ >= valor = COMPRADORES, Δ <= -valor = VENDEDORES, en medio = NEUTRAL.")
+showDom       = input.bool(true, "Mostrar dominancia en la tarjeta", group=grpSM)
+pctMode       = input.string("DISP.", "Texto del % restante de la zona", options=["DISP.", "INTEGRIDAD"], group=grpSM, tooltip="100% = zona virgen. Baja conforme el precio la consume.")
+dimInteg      = input.float(50.0, "Atenuar zonas con integridad menor a (%)", minval=0.0, maxval=100.0, step=5.0, group=grpSM)
+obMinRvol     = input.float(0.0, "Filtro de ruido: RVOL mínimo para crear un OB", minval=0.0, step=0.1, group=grpSM, tooltip="0 = sin filtro. Con 1.0 solo nacen OB con volumen al menos igual al promedio.")
+showFvgPct    = input.bool(true, "Mostrar % disponible dentro de cada FVG", group=grpSM)
+requireReject = input.bool(true, "Exigir vela de rechazo dentro de la zona para la señal", group=grpSM, tooltip="ON: LONG solo si la vela cierra alcista y sobre el fondo del OB; SHORT solo si cierra bajista y bajo el techo. Si el toque no confirma, la zona sigue viva y puede dar señal en una vela posterior.")
+requireDomOK  = input.bool(true, "Bloquear señales en zonas con dominancia contraria", group=grpSM, tooltip="LONG no entra en un OB cuyo Δ indica VENDEDORES; SHORT no entra si indica COMPRADORES.")
+
+showTips      = input.bool(true, "Análisis completo al pasar el mouse sobre la tarjeta (ⓘ)", group=grpSM, tooltip="Cada tarjeta de zona muestra al pasar el mouse (o tocarla en el móvil) el análisis completo: formación, estado, componentes del score y lectura. Las zonas agrupadas en una tarjeta aparecen todas en el mismo análisis.")
+scoreStrength = input.bool(true, "Fuerza del OB según el Score de calidad", group=grpSM, tooltip="ON: DÉBIL/MODERADO/FUERTE sale del Score 0-100 (order flow, desplazamiento, frescura, RVOL y FVG), como en el análisis del mouse. OFF: solo por RVOL.")
+scoreStrong   = input.int(60, "Score mínimo para FUERTE", minval=1, maxval=100, group=grpSM)
+scoreMod      = input.int(40, "Score mínimo para MODERADO", minval=1, maxval=100, group=grpSM)
+
+fvgSignals    = input.bool(true, "Las zonas FVG también pueden dar señal", group=grpSM, tooltip="Antes solo los Order Blocks daban señal y los FVG eran informativos. Con esto, el primer toque a un FVG con vela de rechazo (y sin dominancia contraria) también genera LONG o SHORT, con el SL más allá del hueco. Los FVG son mucho más frecuentes que los OB.")
+showWhy       = input.bool(true, "Mostrar ⛔ cuando una zona tocada NO da señal, y qué filtro la bloqueó", group=grpSM, tooltip="En la vela del toque aparece una etiqueta gris, por ejemplo 'SHORT ⛔ oscilador ADX', con los filtros que la frenaron. Sirve para ver qué ajustar.")
+
+// ==================== 🧰 SESIÓN, RIESGO Y COSTOS ====================
+grpRisk = "🧰 Sesión, riesgo y costos"
+useSessFilter = input.bool(false, "Filtro de sesión: operar solo en las sesiones elegidas", group=grpRisk, tooltip="Usa los horarios y la zona horaria del grupo 'Niveles de Sesión y Referencia'. Fuera de las sesiones permitidas no nace ninguna señal.")
+allowAsia     = input.bool(false, "Permitir señales en sesión Asia", group=grpRisk)
+allowLDN      = input.bool(true, "Permitir señales en sesión Londres", group=grpRisk)
+allowNY       = input.bool(true, "Permitir señales en sesión Nueva York", group=grpRisk)
+showPosSize   = input.bool(true, "Mostrar tamaño de posición en el panel", group=grpRisk, tooltip="Calcula el tamaño para arriesgar el % elegido de tu capital hasta el SL de la operación activa. Es el tamaño nocional: si usas apalancamiento, el margen es menor.")
+acctSize      = input.float(1000.0, "Capital de la cuenta", minval=1.0, group=grpRisk)
+riskPct       = input.float(1.0, "Riesgo por operación (%)", minval=0.05, step=0.05, group=grpRisk)
+feePct        = input.float(0.06, "Comisión por lado (%) para las estadísticas", minval=0.0, step=0.01, group=grpRisk, tooltip="Se descuenta en R de 'Netos' en cada señal (entrada y salida). 0.06% es una comisión típica de futuros; ajústala a tu exchange.")
+slipPct       = input.float(0.02, "Deslizamiento por lado (%) para las estadísticas", minval=0.0, step=0.01, group=grpRisk)
+
+// ==================== 🔗 CONEXIÓN CON OSCILADOR V3.0 ====================
+grpLink = "🔗 Conexión con OSCILADOR V3.0"
+useOscLink     = input.bool(true, "Activar conexión con el oscilador", group=grpLink, tooltip="Activada por defecto. Requiere tener el OSCILADOR V3.0 en el mismo gráfico y temporalidad. Pine no permite preseleccionar las series de otro indicador: elígelas una sola vez abajo y guarda el layout o una plantilla para que TradingView las recuerde. Mientras no sean válidas, el filtro se ignora y el panel lo avisa.")
+srcOscSig      = input.source(close, "Serie: Señal (+1 LONG / −1 SHORT)", group=grpLink)
+srcOscScoreL   = input.source(close, "Serie: Puntaje LONG", group=grpLink)
+srcOscScoreS   = input.source(close, "Serie: Puntaje SHORT", group=grpLink)
+minLinkScore   = input.int(40, "Puntaje mínimo del oscilador para permitir la señal", minval=0, maxval=100, group=grpLink, tooltip="Una señal LONG de este indicador solo nace si el puntaje LONG del oscilador alcanza este valor, y una SHORT si lo alcanza el puntaje SHORT.")
+requireOscSig  = input.bool(false, "Exigir además una señal reciente del oscilador en la misma dirección", group=grpLink, tooltip="Más estricto: el oscilador debe haber emitido su propia señal LONG/SHORT dentro de la vigencia.")
+linkWindow     = input.int(10, "Vigencia de la señal del oscilador (velas)", minval=1, maxval=50, group=grpLink)
+
+// ==================== 🌊 LIQUIDEZ EXTERNA (pegada desde tu app o API) ====================
+grpExt = "🌊 Liquidez externa (pegar desde tu app o API)"
+showExt     = input.bool(true, "Dibujar liquidez externa y automática (interruptor general)", group=grpExt)
+showAuto    = input.bool(true, "Automático: máximos y mínimos previos (día, semana y mes)", group=grpExt, tooltip="PDH/PDL, PWH/PWL y PMH/PML: los extremos del día, la semana y el mes anteriores, donde suelen acumularse órdenes. Se calculan solos desde el gráfico.")
+showEst     = input.bool(true, "Automático: liquidaciones estimadas por apalancamiento", group=grpExt, tooltip="ESTIMACIÓN, no dato real de liquidaciones. Desde el último máximo importante calcula dónde se liquidarían largos abiertos ahí con cada apalancamiento, y desde el último mínimo importante dónde se liquidarían cortos. Solo muestra los niveles que el precio aún no ha cruzado. Para datos reales de liquidaciones pégalos abajo.")
+estPivLen   = input.int(30, "Pivote del swing para las liquidaciones estimadas (velas a cada lado)", minval=5, group=grpExt)
+estLev1     = input.int(25, "Apalancamiento estimado 1", minval=2, group=grpExt)
+estLev2     = input.int(50, "Apalancamiento estimado 2", minval=2, group=grpExt)
+estLev3     = input.int(100, "Apalancamiento estimado 3", minval=2, group=grpExt)
+extText     = input.text_area("", "Niveles (uno por línea)", group=grpExt, tooltip="Formato por línea: precio;tipo;texto;monto. Tipos: LIQ_LONG (liquidaciones de largos, bajo el precio), LIQ_SHORT (liquidaciones de cortos, sobre el precio), SOPORTE, RESISTENCIA o NIVEL. El texto y el monto (en millones) son opcionales. Ejemplo: 82500;LIQ_SHORT;Cluster de cortos;120. Las líneas que empiezan con # se ignoran. Máximo 40 niveles. Son una foto del momento en que los pegas, no un dato en vivo.")
+extLongCol  = input.color(color.new(#FFEB3B, 0), "Color liquidaciones de largos", group=grpExt)
+extShortCol = input.color(color.new(#FF4081, 0), "Color liquidaciones de cortos", group=grpExt)
+extUseSL    = input.bool(true, "Proteger el SL: ponerlo más allá de la liquidación cercana a la zona", group=grpExt, tooltip="LONG: si hay un nivel LIQ_LONG justo bajo el OB, el SL queda por debajo de él. SHORT: si hay un LIQ_SHORT justo sobre el OB, el SL queda por encima. Solo actúa en señales en vivo, nunca en el historial, porque los niveles pegados son una foto actual y alterarían las estadísticas pasadas.")
+extSlRange  = input.float(1.5, "Alcance para buscar esa liquidación (x ATR desde la zona)", minval=0.2, step=0.1, group=grpExt)
+
+// ==================== 5. 💧 LIQUIDEZ ====================
+grpLiq = "💧 Liquidez (EQH/EQL/24h/SR)"
+showLiq    = input.bool(true, "Mostrar liquidez EQH/EQL", group=grpLiq)
+liqLen     = input.int(3, "Pivote de liquidez", minval=2, group=grpLiq)
+liqTolATR  = input.float(0.25, "Tolerancia (x ATR)", step=0.05, group=grpLiq)
+liqCol     = input.color(color.new(color.aqua, 20), "Color liquidez normal", group=grpLiq)
+srMin      = input.int(2, "🧱 Toques para volver S/R", minval=2, maxval=8, group=grpLiq, tooltip="Cuando una línea de liquidez es tocada N veces, se convierte en S/R (soporte/resistencia confirmada) y cambia de color.")
+srCol      = input.color(color.new(color.white, 0), "Color S/R (en desuso: ahora hay color por tipo)", group=grpLiq)
+supCol     = input.color(color.new(#2962FF, 0), "Color SOPORTE automático", group=grpLiq)
+resCol     = input.color(color.new(#FF9800, 0), "Color RESISTENCIA automática", group=grpLiq)
+srMaxATR   = input.float(8.0, "Distancia máxima para mostrar líneas de liquidez y S/R (x ATR del precio)", minval=0.0, step=1.0, group=grpLiq, tooltip="Las líneas más lejanas que esto se ocultan, junto con su texto y su marca en la escala, para que TradingView no aplaste las velas al ajustar la escala vertical. Siguen guardadas y reaparecen cuando el precio se acerca. 0 = mostrar todas. No afecta a los niveles pegados en liquidez externa.")
+showSRLabel = input.bool(true, "Texto SOPORTE / RESISTENCIA con precio en la línea", group=grpLiq, tooltip="Cuando un nivel de liquidez es rechazado las veces indicadas se dibuja solo como línea de soporte (azul) o resistencia (naranja), con su texto. Los soportes y resistencias no se borran al entrar niveles nuevos, solo cuando el precio los rompe.")
+liqHint    = input.bool(true, "Etiquetas POSIBLE LONG/SHORT (solo la más cercana)", group=grpLiq, tooltip="Muestra MÁXIMO 2 etiquetas en el chart: POSIBLE SHORT = liquidez más cercana por encima del precio · POSIBLE LONG = más cercana por debajo. El resto de niveles solo se ve como línea + precio en la barra lateral.")
+maxLiq     = input.int(2, "Máx. líneas por lado", minval=1, maxval=10, group=grpLiq, tooltip="Reducido a 2 por defecto para menos saturación visual.")
+showLiq24  = input.bool(true, "🕐 Liquidez 24h (día anterior)", group=grpLiq, tooltip="ON por defecto: dibuja las líneas de máximo/mínimo de las últimas 24h y llena el panel 'Liq 24h ↑/↓'. Solo es informativo: no exige nada para las señales (eso lo controla 'Exigir barrido de liquidez reciente', que sigue en OFF).")
+liq24Col   = input.color(color.new(color.fuchsia, 0), "Color liquidez 24h", group=grpLiq)
+requireSweep = input.bool(false, "Exigir barrido de liquidez reciente para señales", group=grpLiq, tooltip="Si se activa, las señales LONG/SHORT solo nacen si hubo un barrido de liquidez (💧) en las últimas 10 velas. Recomendado dejarlo OFF y usarlo como confluencia visual.")
+
+grpStyle = "🎨 Estilo"
+bullOBcol  = input.color(color.new(color.teal, 90), "OB Alcista", group=grpStyle)
+bearOBcol  = input.color(color.new(color.red, 90), "OB Bajista", group=grpStyle)
+bullBRcol  = input.color(color.new(color.blue, 85), "Breaker Alcista", group=grpStyle)
+bearBRcol  = input.color(color.new(color.purple, 85), "Breaker Bajista", group=grpStyle)
+fvgBullCol = input.color(color.new(color.teal, 94), "FVG Alcista", group=grpStyle)
+fvgBearCol = input.color(color.new(color.red, 94), "FVG Bajista", group=grpStyle)
+
+grpLbl = "🔤 Etiquetas"
+lblSizeInput = input.string("Pequeño", "Tamaño de etiquetas del gráfico", options=["Muy pequeño", "Pequeño", "Normal", "Grande"], group=grpLbl, tooltip="Controla el tamaño de TODAS las etiquetas: ENTRADA/TP/SL, LONG/SHORT, BOS/CHoCH, sesiones, MÁX/MÍN ANTERIOR, PB, 💧 y PREMIUM/DESCUENTO.")
+lblSize = lblSizeInput == "Muy pequeño" ? size.tiny : lblSizeInput == "Pequeño" ? size.small : lblSizeInput == "Normal" ? size.normal : size.large
+
+grpOsc = "🔗 Oscilador (IGUAL que en el OSCILADOR V3.0)"
+rsiLenConf   = input.int(14, "RSI", group=grpOsc)
+stochLenConf = input.int(14, "Estocástico", group=grpOsc)
+stochSmoothConf = input.int(3, "Suavizado %K del Estocástico (igual que el oscilador)", minval=1, maxval=10, group=grpOsc, tooltip="Debe coincidir con el valor del OSCILADOR V3.0 para que ambos lean lo mismo. 1 = sin suavizar.")
+obLevelConf  = input.int(75, "Sobrecompra", group=grpOsc)
+osLevelConf  = input.int(25, "Sobreventa", group=grpOsc)
+useCombined  = input.bool(true, "Exigir confirmación del oscilador", group=grpOsc, tooltip="RECOMENDADO ON: tu protección anti-FOMO. Una señal LONG solo nace con el oscilador en sobreventa y una SHORT con sobrecompra.")
+useExhFilter = input.bool(false, "Exigir agotamiento reciente", group=grpOsc)
+exhLookback  = input.int(10, "Vigencia agotamiento (barras)", group=grpOsc)
+
+grpADX = "📈 ADX + CONTEXTO DMCRIPTO"
+adxLen    = input.int(14, "Longitud", group=grpADX)
+adxSmooth = input.int(14, "Suavizado", group=grpADX)
+adxWeakLvl   = input.int(20, "Umbral débil", group=grpADX)
+adxStrongLvl = input.int(25, "Umbral fuerte", group=grpADX)
+requireADX   = input.bool(true, "Bloquear señales con ADX débil", group=grpADX, tooltip="ON por defecto: evita entrar en mercado plano/lateral (rango), que es donde más se pierde con estrategias de zona/ruptura. Clave para winrate ≥50% en 1-15m.")
+ctxDeltaLen  = input.int(20, "Período del Delta de Volumen (contexto)", minval=5, group=grpADX)
+ctxMode = input.string("Bloquear señales en contra", "Modo CONTEXTO ADX", options=["Solo información", "Confirmar señales (✅/⚠️)", "Bloquear señales en contra"], group=grpADX, tooltip="ON por defecto en 'Bloquear': solo deja pasar señales a favor del flujo dominante de DI+/DI- y Delta de volumen. Reduce señales pero sube la calidad/winrate.")
+
+grpEntry = "🎯 Entrada / TP / SL"
+showEntryPanel = input.bool(true, "Mostrar panel de operación", group=grpEntry)
+showTradeLines = input.bool(false, "Dibujar también líneas Entrada/TP/SL", group=grpEntry)
+showTradeZones = input.bool(true, "Zonas sombreadas de riesgo (rojo) y ganancia (verde)", group=grpEntry)
+rrInput = input.string("Automático", "Riesgo:Beneficio (TP1)", options=["0.5:1", "0.8:1", "1:1", "1.2:1", "1.5:1", "2:1", "3:1", "Automático"], group=grpEntry)
+tfSec  = timeframe.in_seconds()
+rrAuto = tfSec <= 120 ? 1.0 : tfSec <= 300 ? 1.2 : tfSec <= 900 ? 1.5 : tfSec <= 3600 ? 1.8 : tfSec <= 14400 ? 2.0 : tfSec <= 86400 ? 2.5 : tfSec <= 604800 ? 3.0 : 3.5
+rr     = rrInput == "0.5:1" ? 0.5 : rrInput == "0.8:1" ? 0.8 : rrInput == "1:1" ? 1.0 : rrInput == "1.2:1" ? 1.2 : rrInput == "1.5:1" ? 1.5 : rrInput == "2:1" ? 2.0 : rrInput == "3:1" ? 3.0 : rrAuto
+useMultiTP = input.bool(true, "TP2 y TP3 automáticos (modo runner)", group=grpEntry, tooltip="Al tocar TP1: el SL pasa a BE y aparece TP2. Al tocar TP2: el SL pasa a TP1 (ganancia asegurada) y aparece TP3. Si el precio se devuelve, te quedas con el último nivel asegurado.")
+tp2R = input.float(1.5, "TP2 (x riesgo)", minval=0.5, step=0.1, group=grpEntry)
+tp3R = input.float(2.5, "TP3 (x riesgo)", minval=0.5, step=0.1, group=grpEntry)
+slBuffer = input.float(0.15, "Colchón SL (x ATR)", step=0.05, group=grpEntry)
+useAutoMinSL = input.bool(true, "SL mínimo automático (según timeframe)", group=grpEntry, tooltip="ON por defecto: calcula el SL mínimo según el timeframe (más ancho en 1m, más ajustado en 15m) para que el ruido normal de una vela no te saque de la operación. Desactívalo para fijar tú mismo el valor.")
+minSLatrManual = input.float(0.6, "SL mínimo manual (x ATR)", minval=0.1, step=0.1, group=grpEntry, tooltip="Solo se usa si 'SL mínimo automático' está OFF.")
+minSLatrAuto = tfSec <= 180 ? 0.8 : tfSec <= 300 ? 0.7 : tfSec <= 900 ? 0.5 : 0.4
+minSLatr = useAutoMinSL ? minSLatrAuto : minSLatrManual
+enableBE = input.bool(true, "Mover SL a Break Even", group=grpEntry)
+bePct    = input.float(50, "BE al alcanzar % del camino a TP1", step=5, group=grpEntry)
+tblPos  = input.string("Arriba Izquierda", "Posición panel (PC)", options=["Arriba Derecha","Abajo Derecha","Arriba Izquierda","Abajo Izquierda"], group=grpEntry)
+tblSize = input.string("Grande", "Tamaño texto panel (PC)", options=["Pequeño","Normal","Grande"], group=grpEntry)
+
+grpStats = "📊 Estadísticas"
+showStats = input.bool(true, "Mostrar panel de estadísticas", group=grpStats)
+stPos = input.string("Abajo Derecha", "Posición estadísticas (PC)", options=["Arriba Derecha","Abajo Derecha","Arriba Izquierda","Abajo Izquierda"], group=grpStats)
+
+// ------------------- SESIONES (3 + ZONA HORARIA) -------------------
+grpSess = "🕐 Niveles de Sesión y Referencia"
+showSessLevels = input.bool(false, "Mostrar Máx/Mín de Asia, Londres y NY", group=grpSess)
+sessAsia = input.session("0000-0800", "Sesión Asia", group=grpSess)
+sessLDN  = input.session("0700-1600", "Sesión Londres", group=grpSess)
+sessNY   = input.session("1300-2200", "Sesión Nueva York", group=grpSess)
+tzSel    = input.string("UTC", "Zona horaria de los horarios", options=["UTC", "España (Madrid)", "México (Ciudad de México)", "Colombia (Bogotá)", "Perú (Lima)", "Ecuador (Guayaquil)", "Bolivia (La Paz)", "Venezuela (Caracas)", "Chile (Santiago)", "Argentina (Buenos Aires)", "Rep. Dominicana (Santo Domingo)", "Estados Unidos (Nueva York)", "Otro (manual)"], group=grpSess)
+tzManual = input.string("America/Bogota", "Zona horaria manual (solo si elegiste 'Otro')", group=grpSess)
+asiaCol  = input.color(color.new(color.purple, 20), "Color niveles Asia", group=grpSess)
+ldnCol   = input.color(color.new(color.orange, 20), "Color niveles Londres", group=grpSess)
+nyCol    = input.color(color.new(color.blue, 20), "Color niveles NY", group=grpSess)
+showPDH  = input.bool(false, "Mostrar MÁX. ANTERIOR (día previo)", group=grpSess)
+showPDL  = input.bool(false, "Mostrar MÍN. ANTERIOR (día previo)", group=grpSess)
+showEQ      = input.bool(false, "Línea Equilibrium (50% del rango)", group=grpSess, tooltip="Mitad del rango actual: arriba = Premium (caro), abajo = Discount (barato). OFF por defecto: la etiqueta PREMIUM/DESCUENTO sigue funcionando aunque ocultes la línea.")
+showRotura  = input.bool(false, "Líneas Rotura Long/Short (gatillos)", group=grpSess, tooltip="Nivel del último pivote: si el precio lo rompe, confirma continuación a favor de esa rotura. Desactivado por defecto para limpieza (se solapa con Máx/Mín MAYOR).")
+showPremDisc = input.bool(true, "Etiqueta Premium/Descuento", group=grpSess)
+
+grpHTF = "🌐 Sesgo HTF"
+requireHTF = input.bool(false, "Exigir sesgo HTF", group=grpHTF)
+useAutoHTF = input.bool(true, "Timeframe HTF automático (según el gráfico)", group=grpHTF, tooltip="ON por defecto: si activás 'Exigir sesgo HTF', el timeframe de referencia se adapta solo al gráfico en el que estés parado (1-3m usa 1h, 5-15m usa 4h, 30m-1h usa Diario, 4h usa Semanal, Diario usa Semanal, Semanal+ usa Mensual). Así funciona igual en cualquier temporalidad sin tener que reconfigurar nada.")
+htfTF      = input.timeframe("240", "Timeframe HTF (manual)", group=grpHTF, tooltip="Solo se usa si 'Timeframe HTF automático' está OFF.")
+htfEmaLen  = input.int(50, "EMA HTF", group=grpHTF)
+
+// ------------------- MEDIAS MÓVILES (EMA) -------------------
+grpEMA = "📉 Medias Móviles (EMA)"
+showEMA50  = input.bool(true, "Mostrar EMA 50", group=grpEMA)
+ema50Len   = input.int(50, "Longitud EMA 50", minval=1, group=grpEMA)
+ema50Color = input.color(color.blue, "Color EMA 50", group=grpEMA)
+showEMA200 = input.bool(true, "Mostrar EMA 200", group=grpEMA)
+ema200Len  = input.int(200, "Longitud EMA 200", minval=1, group=grpEMA)
+ema200Color = input.color(color.orange, "Color EMA 200", group=grpEMA)
+
+grpBridge = "📨 Puente de señales"
+sendBridge = input.bool(true, "Enviar señales LONG/SHORT con datos (entrada, TP, SL, R:R) por alert()", group=grpBridge, tooltip="Crea la alerta con condición 'Cualquier llamada a alert()' en este indicador. El mensaje es un JSON listo para el puente por correo / webhook.")
+
+// ------------------- CÁLCULOS BASE -------------------
+atr = ta.atr(atrLen)
+vMA = ta.sma(volume, whaleLen)
+maxOBs = mobileMode ? math.min(3, maxOBsInput) : maxOBsInput
+maxFZs = mobileMode ? math.min(4, maxFZsInput) : maxFZsInput
+
+f_px(float x) => str.tostring(x, format.mintick)
+f_strengthCol(string s, bool bull, int trans) => s == "FUERTE" ? color.new(bull ? color.green : color.red, trans) : s == "MODERADO" ? color.new(color.orange, trans) : color.new(color.gray, trans)
+f_volFmt(float v) => v >= 1000000 ? str.tostring(v / 1000000, "#.##") + "M" : v >= 1000 ? str.tostring(v / 1000, "#.##") + "K" : str.tostring(v, "#")
+
+f_integ(float maxFill) => math.max(0.0, 100.0 - maxFill)
+f_dom(float d) => d >= domTh ? "COMPRADORES" : d <= -domTh ? "VENDEDORES" : "NEUTRAL"
+f_legDelta(int n) =>
+    float sd = 0.0
+    float sv = 0.0
+    for k = 0 to n
+        float r = high[k] - low[k]
+        sd += r > 0 ? volume[k] * (2 * close[k] - high[k] - low[k]) / r : 0.0
+        sv += volume[k]
+    sv > 0 ? sd / sv * 100 : 0.0
+
+tz = tzSel == "España (Madrid)" ? "Europe/Madrid" : tzSel == "México (Ciudad de México)" ? "America/Mexico_City" : tzSel == "Colombia (Bogotá)" ? "America/Bogota" : tzSel == "Perú (Lima)" ? "America/Lima" : tzSel == "Ecuador (Guayaquil)" ? "America/Guayaquil" : tzSel == "Bolivia (La Paz)" ? "America/La_Paz" : tzSel == "Venezuela (Caracas)" ? "America/Caracas" : tzSel == "Chile (Santiago)" ? "America/Santiago" : tzSel == "Argentina (Buenos Aires)" ? "America/Argentina/Buenos_Aires" : tzSel == "Rep. Dominicana (Santo Domingo)" ? "America/Santo_Domingo" : tzSel == "Estados Unidos (Nueva York)" ? "America/New_York" : tzSel == "Otro (manual)" ? tzManual : "UTC"
+
+osc   = (ta.rsi(close, rsiLenConf) + ta.sma(ta.stoch(close, high, low, stochLenConf), stochSmoothConf)) / 2
+oscOB = osc >= obLevelConf
+oscOS = osc <= osLevelConf
+
+var int bOBc = 0
+var int bOSc = 0
+var int xOB = 0
+var int xOS = 0
+var bool wOB = false
+var bool wOS = false
+
+if oscOB
+    bOBc := bOBc + 1
+    wOB := true
+    xOB := 0
+else if wOB
+    xOB := xOB + 1
+    if xOB > 2
+        bOBc := 0
+        wOB := false
+else
+    bOBc := 0
+
+if oscOS
+    bOSc := bOSc + 1
+    wOS := true
+    xOS := 0
+else if wOS
+    xOS := xOS + 1
+    if xOS > 2
+        bOSc := 0
+        wOS := false
+else
+    bOSc := 0
+
+exhBull = bOSc[1] >= 3 and osc > osLevelConf and osc[1] <= osLevelConf
+exhBear = bOBc[1] >= 3 and osc < obLevelConf and osc[1] >= obLevelConf
+bsExhBull = ta.barssince(exhBull)
+bsExhBear = ta.barssince(exhBear)
+exhBullOK = not useExhFilter or (not na(bsExhBull) and bsExhBull <= exhLookback)
+exhBearOK = not useExhFilter or (not na(bsExhBear) and bsExhBear <= exhLookback)
+
+[diP, diM, adx] = ta.dmi(adxLen, adxSmooth)
+adxIsWeak   = adx < adxWeakLvl
+adxIsStrong = adx >= adxStrongLvl
+adxOK = not requireADX or not adxIsWeak
+
+// CONTEXTO ADX DMCRIPTO (integrado)
+dirVol   = close > open ? volume : close < open ? -volume : 0.0
+netDelta = math.sum(dirVol, ctxDeltaLen)
+totVol   = math.sum(volume, ctxDeltaLen)
+deltaPct = totVol != 0 ? netDelta / totVol * 100 : 0.0
+bullConf = diP > diM and deltaPct > 0
+bearConf = diM > diP and deltaPct < 0
+ctxBias = bearConf or (diM > diP and adx >= adxWeakLvl) ? "SHORT" : bullConf or (diP > diM and adx >= adxWeakLvl) ? "LONG" : "NEUTRO"
+ctxBlock = ctxMode == "Bloquear señales en contra"
+ctxMark  = ctxMode == "Confirmar señales (✅/⚠️)"
+ctxLongOK  = not ctxBlock or ctxBias == "LONG"
+ctxShortOK = not ctxBlock or ctxBias == "SHORT"
+
+htfTFAuto = tfSec <= 180 ? "60" : tfSec <= 900 ? "240" : tfSec <= 3600 ? "1D" : tfSec <= 14400 ? "1W" : tfSec <= 86400 ? "1W" : "1M"
+htfTFUsed = useAutoHTF ? htfTFAuto : htfTF
+htfC = request.security(syminfo.tickerid, htfTFUsed, close[1], lookahead=barmerge.lookahead_on)
+htfE = request.security(syminfo.tickerid, htfTFUsed, ta.ema(close, htfEmaLen)[1], lookahead=barmerge.lookahead_on)
+htfBullOK = not requireHTF or htfC > htfE
+htfBearOK = not requireHTF or htfC < htfE
+
+ema50v  = ta.ema(close, ema50Len)
+ema200v = ta.ema(close, ema200Len)
+plot(showEMA50 ? ema50v : na, "EMA 50", ema50Color, 1)
+plot(showEMA200 ? ema200v : na, "EMA 200", ema200Color, 2)
+
+ph = ta.pivothigh(high, swingLen, swingLen)
+pl = ta.pivotlow(low, swingLen, swingLen)
+var float lPH = na
+var float lPL = na
+var int lPHb = na
+var int lPLb = na
+if not na(ph)
+    lPH := ph
+    lPHb := bar_index - swingLen
+if not na(pl)
+    lPL := pl
+    lPLb := bar_index - swingLen
+bosUp = not na(lPH) and close > lPH and close[1] <= lPH
+bosDn = not na(lPL) and close < lPL and close[1] >= lPL
+var bool trendUp = false
+if bosUp
+    trendUp := true
+if bosDn
+    trendUp := false
+chochUp = bosUp and not trendUp[1]
+chochDn = bosDn and trendUp[1]
+
+// Estructura SWING (ruptura importante) para distinguir OB swing de OB internos
+phBig = ta.pivothigh(high, swingBigLen, swingBigLen)
+plBig = ta.pivotlow(low, swingBigLen, swingBigLen)
+var float lPHBig = na
+var float lPLBig = na
+var int lastBigUp = -1000
+var int lastBigDn = -1000
+if not na(phBig)
+    lPHBig := phBig
+if not na(plBig)
+    lPLBig := plBig
+if not na(lPHBig) and close > lPHBig and close[1] <= lPHBig
+    lastBigUp := bar_index
+if not na(lPLBig) and close < lPLBig and close[1] >= lPLBig
+    lastBigDn := bar_index
+swingUpNow = bar_index - lastBigUp <= 2
+swingDnNow = bar_index - lastBigDn <= 2
+
+iph = ta.pivothigh(high, internalSwingLen, internalSwingLen)
+ipl = ta.pivotlow(low, internalSwingLen, internalSwingLen)
+var float ilPH = na
+var float ilPL = na
+if not na(iph)
+    ilPH := iph
+if not na(ipl)
+    ilPL := ipl
+ibosUp = not na(ilPH) and close > ilPH and close[1] <= ilPH
+ibosDn = not na(ilPL) and close < ilPL and close[1] >= ilPL
+var bool itrendUp = false
+if ibosUp
+    itrendUp := true
+if ibosDn
+    itrendUp := false
+ichochUp = ibosUp and not itrendUp[1]
+ichochDn = ibosDn and itrendUp[1]
+
+var label lastIStructLbl = na
+if showInternalStruct and ibosUp
+    if not na(lastIStructLbl)
+        label.delete(lastIStructLbl)
+    lastIStructLbl := label.new(bar_index, low, ichochUp ? "iCHoCH" : "iBOS", style=label.style_label_up, color=color.new(ichochUp ? color.lime : color.teal, 60), textcolor=color.white, size=size.tiny)
+if showInternalStruct and ibosDn
+    if not na(lastIStructLbl)
+        label.delete(lastIStructLbl)
+    lastIStructLbl := label.new(bar_index, high, ichochDn ? "iCHoCH" : "iBOS", style=label.style_label_down, color=color.new(ichochDn ? color.orange : color.red, 60), textcolor=color.white, size=size.tiny)
+
+showStruct = not masterClean or showBOSLabels
+var label lastStructLbl = na
+if showStruct and bosUp
+    if not na(lastStructLbl)
+        label.delete(lastStructLbl)
+    lastStructLbl := label.new(bar_index, low, chochUp ? "CHoCH" : "BOS", style=label.style_label_up, color=chochUp ? color.lime : color.teal, textcolor=color.black, size=lblSize)
+if showStruct and bosDn
+    if not na(lastStructLbl)
+        label.delete(lastStructLbl)
+    lastStructLbl := label.new(bar_index, high, chochDn ? "CHoCH" : "BOS", style=label.style_label_down, color=chochDn ? color.orange : color.red, textcolor=color.white, size=lblSize)
+
+f_hLine(float y, color col, int w, int sty) =>
+    line.new(bar_index - 1, y, bar_index, y, extend=extend.right, color=col, width=w, style=sty == 1 ? line.style_dashed : sty == 2 ? line.style_dotted : line.style_solid)
+
+type LiqLevel
+    line ln
+    float lvl
+    int touches
+    bool active
+    bool isSR
+    int lastTouch
+    label lb
+
+var array<LiqLevel> liqHigh = array.new<LiqLevel>()
+var array<LiqLevel> liqLow = array.new<LiqLevel>()
+
+f_near(float px) => srMaxATR <= 0 or (not na(px) and math.abs(px - close) <= atr * srMaxATR)
+
+f_hasLevel(array<LiqLevel> arr, float px) =>
+    bool found = false
+    if not na(px) and arr.size() > 0
+        for k = 0 to arr.size() - 1
+            LiqLevel q = arr.get(k)
+            if q.active and q.lvl == px
+                found := true
+    found
+
+f_dropOldest(array<LiqLevel> arr) =>
+    int idx = 0
+    for k = 0 to arr.size() - 1
+        if not arr.get(k).isSR
+            idx := k
+            break
+    LiqLevel old = arr.remove(idx)
+    if not na(old.ln)
+        line.delete(old.ln)
+    if not na(old.lb)
+        label.delete(old.lb)
+
+phLiq = ta.pivothigh(high, liqLen, liqLen)
+plLiq = ta.pivotlow(low, liqLen, liqLen)
+
+if showLiq and not na(phLiq)
+    found = false
+    if liqHigh.size() > 0
+        for idx = 0 to liqHigh.size() - 1
+            LiqLevel lvl = liqHigh.get(idx)
+            if lvl.active and math.abs(lvl.lvl - phLiq) <= atr * liqTolATR
+                found := true
+                break
+    if not found
+        liqHigh.push(LiqLevel.new(f_hLine(phLiq, liqCol, 1, 2), phLiq, 0, true, false, -1000, na))
+        while liqHigh.size() > maxLiq
+            f_dropOldest(liqHigh)
+
+if showLiq and not na(plLiq)
+    found = false
+    if liqLow.size() > 0
+        for idx = 0 to liqLow.size() - 1
+            LiqLevel lvl = liqLow.get(idx)
+            if lvl.active and math.abs(lvl.lvl - plLiq) <= atr * liqTolATR
+                found := true
+                break
+    if not found
+        liqLow.push(LiqLevel.new(f_hLine(plLiq, liqCol, 1, 2), plLiq, 0, true, false, -1000, na))
+        while liqLow.size() > maxLiq
+            f_dropOldest(liqLow)
+
+sweepBearNow = false
+sweepBullNow = false
+
+iH = liqHigh.size() - 1
+while iH >= 0
+    LiqLevel lvl = liqHigh.get(iH)
+    if lvl.active
+        if high >= lvl.lvl - atr * liqTolATR and high <= lvl.lvl + atr * liqTolATR and close < lvl.lvl and bar_index - lvl.lastTouch > liqLen
+            lvl.touches := lvl.touches + 1
+            lvl.lastTouch := bar_index
+            if lvl.touches >= srMin and not lvl.isSR
+                lvl.isSR := true
+                if not na(lvl.ln)
+                    line.set_color(lvl.ln, resCol)
+                    line.set_width(lvl.ln, 2)
+                    line.set_style(lvl.ln, line.style_solid)
+                if showSRLabel and na(lvl.lb)
+                    lvl.lb := label.new(bar_index, lvl.lvl, "RESISTENCIA " + f_px(lvl.lvl), style=label.style_label_left, color=resCol, textcolor=color.white, size=lblSize)
+        realSweepHigh = high > lvl.lvl + atr * liqTolATR and close < lvl.lvl
+        brokeAboveHigh = close > lvl.lvl
+        if realSweepHigh or brokeAboveHigh
+            if realSweepHigh
+                sweepBearNow := true
+            lvl.active := false
+            if not na(lvl.ln)
+                line.delete(lvl.ln)
+                lvl.ln := na
+            if not na(lvl.lb)
+                label.delete(lvl.lb)
+            liqHigh.remove(iH)
+    iH -= 1
+
+iL = liqLow.size() - 1
+while iL >= 0
+    LiqLevel lvl = liqLow.get(iL)
+    if lvl.active
+        if low <= lvl.lvl + atr * liqTolATR and low >= lvl.lvl - atr * liqTolATR and close > lvl.lvl and bar_index - lvl.lastTouch > liqLen
+            lvl.touches := lvl.touches + 1
+            lvl.lastTouch := bar_index
+            if lvl.touches >= srMin and not lvl.isSR
+                lvl.isSR := true
+                if not na(lvl.ln)
+                    line.set_color(lvl.ln, supCol)
+                    line.set_width(lvl.ln, 2)
+                    line.set_style(lvl.ln, line.style_solid)
+                if showSRLabel and na(lvl.lb)
+                    lvl.lb := label.new(bar_index, lvl.lvl, "SOPORTE " + f_px(lvl.lvl), style=label.style_label_left, color=supCol, textcolor=color.white, size=lblSize)
+        realSweepLow = low < lvl.lvl - atr * liqTolATR and close > lvl.lvl
+        brokeBelowLow = close < lvl.lvl
+        if realSweepLow or brokeBelowLow
+            if realSweepLow
+                sweepBullNow := true
+            lvl.active := false
+            if not na(lvl.ln)
+                line.delete(lvl.ln)
+                lvl.ln := na
+            if not na(lvl.lb)
+                label.delete(lvl.lb)
+            liqLow.remove(iL)
+    iL -= 1
+
+if showSweepTag and sweepBearNow
+    label.new(bar_index, high, "💧", style=label.style_label_down, color=color.new(color.aqua, 40), textcolor=color.white, size=size.tiny)
+if showSweepTag and sweepBullNow
+    label.new(bar_index, low, "💧", style=label.style_label_up, color=color.new(color.aqua, 40), textcolor=color.white, size=size.tiny)
+
+bars24 = tfSec < 86400 ? math.max(2, math.round(86400 / tfSec)) : 1
+h24p = tfSec > 86400 ? na : tfSec == 86400 ? high[1] : ta.highest(high[1], bars24)
+l24p = tfSec > 86400 ? na : tfSec == 86400 ? low[1] : ta.lowest(low[1], bars24)
+var line h24_ln = na
+var line l24_ln = na
+
+sweepH24 = showLiq24 and not na(h24p) and ((high > h24p and close < h24p) or close > h24p)
+sweepL24 = showLiq24 and not na(l24p) and ((low < l24p and close > l24p) or close < l24p)
+
+var bool h24Swept = false
+var bool l24Swept = false
+
+if sweepH24
+    h24Swept := true
+if sweepL24
+    l24Swept := true
+
+newDay = ta.change(time("D")) != 0
+if newDay
+    h24Swept := false
+    l24Swept := false
+    if not na(h24_ln)
+        line.delete(h24_ln)
+        h24_ln := na
+    if not na(l24_ln)
+        line.delete(l24_ln)
+        l24_ln := na
+
+if showLiq24 and not h24Swept and not na(h24p)
+    if not na(h24_ln)
+        line.delete(h24_ln)
+    h24_ln := f_hLine(h24p, liq24Col, 1, 1)
+else
+    if not na(h24_ln)
+        line.delete(h24_ln)
+        h24_ln := na
+
+if showLiq24 and not l24Swept and not na(l24p)
+    if not na(l24_ln)
+        line.delete(l24_ln)
+    l24_ln := f_hLine(l24p, liq24Col, 1, 1)
+else
+    if not na(l24_ln)
+        line.delete(l24_ln)
+        l24_ln := na
+
+float nearHigh = na
+if liqHigh.size() > 0
+    for idx = 0 to liqHigh.size() - 1
+        LiqLevel lv = liqHigh.get(idx)
+        if lv.active and lv.lvl > close and (na(nearHigh) or lv.lvl < nearHigh)
+            nearHigh := lv.lvl
+if showLiq24 and not h24Swept and not na(h24p) and h24p > close and (na(nearHigh) or h24p < nearHigh)
+    nearHigh := h24p
+
+float nearLow = na
+if liqLow.size() > 0
+    for idx = 0 to liqLow.size() - 1
+        LiqLevel lv = liqLow.get(idx)
+        if lv.active and lv.lvl < close and (na(nearLow) or lv.lvl > nearLow)
+            nearLow := lv.lvl
+if showLiq24 and not l24Swept and not na(l24p) and l24p < close and (na(nearLow) or l24p > nearLow)
+    nearLow := l24p
+
+var label posShortTag = na
+var label posLongTag = na
+if barstate.islast
+    if not na(posShortTag)
+        label.delete(posShortTag)
+        posShortTag := na
+    if not na(posLongTag)
+        label.delete(posLongTag)
+        posLongTag := na
+    if liqHint and not na(nearHigh)
+        posShortTag := label.new(bar_index, nearHigh, "POSIBLE SHORT · " + f_px(nearHigh), style=label.style_label_left, color=color.red, textcolor=color.white, size=size.tiny)
+    if liqHint and not na(nearLow)
+        posLongTag := label.new(bar_index, nearLow, "POSIBLE LONG · " + f_px(nearLow), style=label.style_label_left, color=color.green, textcolor=color.white, size=size.tiny)
+
+if barstate.islast
+    if liqHigh.size() > 0
+        for idx = 0 to liqHigh.size() - 1
+            LiqLevel q1 = liqHigh.get(idx)
+            bool near1 = f_near(q1.lvl)
+            if not na(q1.ln)
+                line.set_color(q1.ln, near1 ? (q1.isSR ? resCol : liqCol) : na)
+            if not na(q1.lb)
+                label.set_x(q1.lb, bar_index + 1)
+                label.set_color(q1.lb, near1 ? resCol : na)
+                label.set_textcolor(q1.lb, near1 ? color.white : na)
+    if liqLow.size() > 0
+        for idx = 0 to liqLow.size() - 1
+            LiqLevel q2 = liqLow.get(idx)
+            bool near2 = f_near(q2.lvl)
+            if not na(q2.ln)
+                line.set_color(q2.ln, near2 ? (q2.isSR ? supCol : liqCol) : na)
+            if not na(q2.lb)
+                label.set_x(q2.lb, bar_index + 1)
+                label.set_color(q2.lb, near2 ? supCol : na)
+                label.set_textcolor(q2.lb, near2 ? color.white : na)
+
+plot(barstate.islast and liqHigh.size() > 0 and f_near(liqHigh.get(0).lvl) ? liqHigh.get(0).lvl : na, "💧 EQH 1", color=color.red, style=plot.style_linebr, linewidth=1)
+plot(barstate.islast and liqHigh.size() > 1 and f_near(liqHigh.get(1).lvl) ? liqHigh.get(1).lvl : na, "💧 EQH 2", color=color.new(color.red, 40), style=plot.style_linebr, linewidth=1)
+plot(barstate.islast and liqHigh.size() > 2 and f_near(liqHigh.get(2).lvl) ? liqHigh.get(2).lvl : na, "💧 EQH 3", color=color.new(color.red, 60), style=plot.style_linebr, linewidth=1)
+plot(barstate.islast and liqHigh.size() > 3 and f_near(liqHigh.get(3).lvl) ? liqHigh.get(3).lvl : na, "💧 EQH 4", color=color.new(color.red, 75), style=plot.style_linebr, linewidth=1)
+plot(barstate.islast and liqLow.size() > 0 and f_near(liqLow.get(0).lvl) ? liqLow.get(0).lvl : na, "💧 EQL 1", color=color.green, style=plot.style_linebr, linewidth=1)
+plot(barstate.islast and liqLow.size() > 1 and f_near(liqLow.get(1).lvl) ? liqLow.get(1).lvl : na, "💧 EQL 2", color=color.new(color.green, 40), style=plot.style_linebr, linewidth=1)
+plot(barstate.islast and liqLow.size() > 2 and f_near(liqLow.get(2).lvl) ? liqLow.get(2).lvl : na, "💧 EQL 3", color=color.new(color.green, 60), style=plot.style_linebr, linewidth=1)
+plot(barstate.islast and liqLow.size() > 3 and f_near(liqLow.get(3).lvl) ? liqLow.get(3).lvl : na, "💧 EQL 4", color=color.new(color.green, 75), style=plot.style_linebr, linewidth=1)
+plot(barstate.islast and showLiq24 and not h24Swept and not na(h24p) ? h24p : na, "🕐 Liq 24h ↑", color=liq24Col, style=plot.style_linebr, linewidth=1)
+plot(barstate.islast and showLiq24 and not l24Swept and not na(l24p) ? l24p : na, "🕐 Liq 24h ↓", color=liq24Col, style=plot.style_linebr, linewidth=1)
+
+// ==================== LIQUIDEZ EXTERNA Y AUTOMÁTICA ====================
+var array<float>  pstPx = array.new<float>()
+var array<string> pstTp = array.new<string>()
+var array<string> pstTx = array.new<string>()
+var array<float>  pstAm = array.new<float>()
+var array<float>  extPx = array.new<float>()
+var array<string> extTp = array.new<string>()
+var array<string> extTx = array.new<string>()
+var array<float>  extAm = array.new<float>()
+
+if barstate.isfirst and showExt
+    array<string> extRows = str.split(extText, "\n")
+    for r = 0 to extRows.size() - 1
+        string row = str.trim(extRows.get(r))
+        if str.length(row) > 0 and not str.startswith(row, "#") and pstPx.size() < 40
+            array<string> parts = str.split(row, ";")
+            float pxv = str.tonumber(str.replace_all(str.trim(parts.get(0)), ",", "."))
+            if not na(pxv)
+                string rawTp = parts.size() > 1 ? str.upper(str.replace_all(str.trim(parts.get(1)), " ", "_")) : "NIVEL"
+                string tpe = str.contains(rawTp, "LIQ") and str.contains(rawTp, "LONG") ? "LIQ_LONG" : str.contains(rawTp, "LIQ") and str.contains(rawTp, "SHORT") ? "LIQ_SHORT" : str.startswith(rawTp, "SOP") ? "SOPORTE" : str.startswith(rawTp, "RES") ? "RESISTENCIA" : "NIVEL"
+                string txt = parts.size() > 2 ? str.trim(parts.get(2)) : ""
+                float amv = parts.size() > 3 ? str.tonumber(str.replace_all(str.trim(parts.get(3)), ",", ".")) : na
+                pstPx.push(pxv)
+                pstTp.push(tpe)
+                pstTx.push(txt)
+                pstAm.push(amv)
+    if pstPx.size() > 0
+        for k = 0 to pstPx.size() - 1
+            extPx.push(pstPx.get(k))
+            extTp.push(pstTp.get(k))
+            extTx.push(pstTx.get(k))
+            extAm.push(pstAm.get(k))
+
+f_addLv(float px, string tp, string tx, float am) =>
+    if not na(px)
+        extPx.push(px)
+        extTp.push(tp)
+        extTx.push(tx)
+        extAm.push(am)
+
+f_extName(int i) =>
+    string t = extTp.get(i)
+    string x = extTx.get(i)
+    x != "" ? x : t == "LIQ_LONG" ? "LIQ LARGOS" : t == "LIQ_SHORT" ? "LIQ CORTOS" : t
+
+// Liquidación externa pegada más cercana a un borde de zona, dentro del alcance (para proteger el SL).
+// Solo usa niveles pegados por el usuario; las liquidaciones estimadas no mueven el SL.
+f_extLevelNear(float zoneEdge, bool below) =>
+    float res = na
+    if extPx.size() > 0
+        for i = 0 to extPx.size() - 1
+            float plv = extPx.get(i)
+            string tlv = extTp.get(i)
+            if below and tlv == "LIQ_LONG" and plv < zoneEdge and plv >= zoneEdge - atr * extSlRange
+                if na(res) or plv > res
+                    res := plv
+            if not below and tlv == "LIQ_SHORT" and plv > zoneEdge and plv <= zoneEdge + atr * extSlRange
+                if na(res) or plv < res
+                    res := plv
+    res
+
+// Máximos y mínimos de períodos anteriores (cerrados, sin mirar al futuro)
+apdh = request.security(syminfo.tickerid, "D", high[1], lookahead=barmerge.lookahead_on)
+apdl = request.security(syminfo.tickerid, "D", low[1], lookahead=barmerge.lookahead_on)
+apwh = request.security(syminfo.tickerid, "W", high[1], lookahead=barmerge.lookahead_on)
+apwl = request.security(syminfo.tickerid, "W", low[1], lookahead=barmerge.lookahead_on)
+apmh = request.security(syminfo.tickerid, "M", high[1], lookahead=barmerge.lookahead_on)
+apml = request.security(syminfo.tickerid, "M", low[1], lookahead=barmerge.lookahead_on)
+
+// Último swing importante, base de las liquidaciones estimadas
+mjH = ta.pivothigh(high, estPivLen, estPivLen)
+mjL = ta.pivotlow(low, estPivLen, estPivLen)
+var float lastMajH = na
+var float lastMajL = na
+if not na(mjH)
+    lastMajH := mjH
+if not na(mjL)
+    lastMajL := mjL
+
+// En la última vela se reconstruye la lista: niveles pegados + automáticos
+if barstate.islast and showExt
+    extPx.clear()
+    extTp.clear()
+    extTx.clear()
+    extAm.clear()
+    if pstPx.size() > 0
+        for k = 0 to pstPx.size() - 1
+            f_addLv(pstPx.get(k), pstTp.get(k), pstTx.get(k), pstAm.get(k))
+    if showAuto
+        f_addLv(apdh, "PREV", "PDH", na)
+        f_addLv(apdl, "PREV", "PDL", na)
+        f_addLv(apwh, "PREV", "PWH", na)
+        f_addLv(apwl, "PREV", "PWL", na)
+        f_addLv(apmh, "PREV", "PMH", na)
+        f_addLv(apml, "PREV", "PML", na)
+    if showEst
+        array<int> estLevs = array.from(estLev1, estLev2, estLev3)
+        for k = 0 to 2
+            int lv = estLevs.get(k)
+            if not na(lastMajH)
+                float lq = lastMajH * (1 - 1.0 / lv)
+                if lq < close
+                    f_addLv(lq, "EST_LONG", "LIQ LARGOS ~" + str.tostring(lv) + "x est.", na)
+            if not na(lastMajL)
+                float sq = lastMajL * (1 + 1.0 / lv)
+                if sq > close
+                    f_addLv(sq, "EST_SHORT", "LIQ CORTOS ~" + str.tostring(lv) + "x est.", na)
+
+var array<line>  extLines = array.new<line>()
+var array<label> extLbls  = array.new<label>()
+if barstate.islast and showExt
+    while extLines.size() > 0
+        line.delete(extLines.pop())
+    while extLbls.size() > 0
+        label.delete(extLbls.pop())
+    float extMax = 0.0
+    if extAm.size() > 0
+        for i = 0 to extAm.size() - 1
+            if not na(extAm.get(i))
+                extMax := math.max(extMax, extAm.get(i))
+    if extPx.size() > 0
+        for i = 0 to extPx.size() - 1
+            float pe = extPx.get(i)
+            if f_near(pe)
+                string te = extTp.get(i)
+                float ae = extAm.get(i)
+                color ce = te == "LIQ_LONG" or te == "EST_LONG" ? extLongCol : te == "LIQ_SHORT" or te == "EST_SHORT" ? extShortCol : te == "SOPORTE" ? supCol : te == "RESISTENCIA" ? resCol : te == "PREV" ? color.new(color.silver, 10) : color.new(color.white, 20)
+                int we = extMax > 0 and not na(ae) ? 1 + math.round(ae / extMax * 3) : 1
+                int sty = te == "LIQ_LONG" or te == "LIQ_SHORT" ? 1 : te == "EST_LONG" or te == "EST_SHORT" or te == "PREV" ? 2 : 0
+                extLines.push(f_hLine(pe, ce, we, sty))
+                extLbls.push(label.new(bar_index + 1, pe, f_extName(i) + " " + f_px(pe) + (na(ae) ? "" : " · " + str.tostring(ae, "#.#") + "M"), style=label.style_label_left, color=color.new(ce, 15), textcolor=te == "LIQ_LONG" or te == "EST_LONG" or te == "PREV" ? color.black : color.white, size=lblSize))
+
+// Más cercana por encima y por debajo del precio (para el panel), solo entre las visibles
+int extUpIdx = -1
+int extDnIdx = -1
+if barstate.islast and showExt and extPx.size() > 0
+    float dUp = 1000000000.0
+    float dDn = 1000000000.0
+    for i = 0 to extPx.size() - 1
+        float pq = extPx.get(i)
+        if pq > close and pq - close < dUp and f_near(pq)
+            dUp := pq - close
+            extUpIdx := i
+        if pq <= close and close - pq < dDn and f_near(pq)
+            dDn := close - pq
+            extDnIdx := i
+
+// El precio tocó algún nivel (alerta)
+bool extTouch = false
+if showExt and extPx.size() > 0
+    for i = 0 to extPx.size() - 1
+        float pt = extPx.get(i)
+        if low <= pt and high >= pt
+            extTouch := true
+
+bsSweepBull = ta.barssince(sweepBullNow)
+bsSweepBear = ta.barssince(sweepBearNow)
+sweepBullRec = not na(bsSweepBull) and bsSweepBull <= 10
+sweepBearRec = not na(bsSweepBear) and bsSweepBear <= 10
+sweepOKBull = not requireSweep or sweepBullRec
+sweepOKBear = not requireSweep or sweepBearRec
+
+type OB
+    box bx
+    float top
+    float bot
+    bool bull
+    bool breaker
+    bool mit
+    bool inst
+    label tag
+    label brTag
+    float rvol
+    string strength
+    int mergeCount
+    float maxFill
+    float vol
+    float delta
+    bool swing
+    bool pbDone
+    float disp
+    int visits
+    bool wasIn
+    int born
+
+var array<OB> obs = array.new<OB>()
+
+type FZ
+    box bx
+    float top
+    float bot
+    bool bull
+    bool mit
+    float rvol
+    string strength
+    float maxFill
+    float vol
+    float delta
+    bool touched
+    int born
+
+var array<FZ> fzs = array.new<FZ>()
+
+f_clamp100(float x) => math.max(0.0, math.min(100.0, x))
+
+f_legDisp(int n, bool bull) =>
+    float bestBody = 0.0
+    for k = 0 to n - 1
+        float body = bull ? close[k] - open[k] : open[k] - close[k]
+        bestBody := math.max(bestBody, body)
+    atr > 0 ? bestBody / atr : 0.0
+
+f_hasFvg(OB o) =>
+    bool res = false
+    if fzs.size() > 0
+        for i = 0 to fzs.size() - 1
+            FZ f = fzs.get(i)
+            if f.bull == o.bull and f.top >= o.bot and f.bot <= o.top
+                res := true
+    res
+
+f_obScore(OB o) =>
+    float aligned = o.bull ? o.delta : -o.delta
+    float cOF = f_clamp100(aligned * 2)
+    float cDS = f_clamp100(o.disp / 1.25 * 100)
+    float cFR = f_clamp100(f_integ(o.maxFill) * math.max(0.0, 1.0 - 0.1 * o.visits))
+    float cRV = f_clamp100(o.rvol / 2.2 * 100)
+    float cFV = f_hasFvg(o) ? 100.0 : 0.0
+    float sc = cOF * 0.35 + cDS * 0.15 + cFR * 0.20 + cRV * 0.20 + cFV * 0.10
+    [sc, cOF, cDS, cFR, cRV, cFV]
+
+f_obStrengthTxt(OB o) =>
+    [sc, a1, a2, a3, a4, a5] = f_obScore(o)
+    sc >= scoreStrong ? "FUERTE" : sc >= scoreMod ? "MODERADO" : "DÉBIL"
+
+f_obTip(OB o) =>
+    [sc, cOF, cDS, cFR, cRV, cFV] = f_obScore(o)
+    string q = sc >= scoreStrong ? "FUERTE" : sc >= scoreMod ? "MODERADO" : "DÉBIL"
+    string dq = o.disp >= 1.25 ? "FUERTE" : o.disp >= 0.75 ? "MODERADO" : "DÉBIL"
+    string title = o.breaker ? "ANÁLISIS DEL BREAKER (ex-" + (o.bull ? "soporte" : "resistencia") + ")" : "ANÁLISIS DEL ORDER BLOCK"
+    string rd = sc >= scoreStrong ? "Configuración sólida. El rechazo cuenta con buen respaldo estructural y de volumen." : sc >= scoreMod ? "Configuración intermedia. Conviene esperar confirmación en una temporalidad menor." : "Configuración deteriorada o de baja calidad. El rechazo presenta menor respaldo estructural."
+    string warn = (o.bull ? o.delta <= -domTh : o.delta >= domTh) ? "\nAdvertencia: la dominancia es contraria a la dirección de la zona." : ""
+    string t1 = title + "\nDirección: " + (o.bull ? "ALCISTA" : "BAJISTA") + "\nOrigen: " + (o.swing ? "Swing" : "Interno") + "\nCalidad de rechazo: " + q + "\nScore: " + str.tostring(sc, "#") + "/100"
+    string t2 = "\n\nFORMACIÓN\nVolumen: " + f_volFmt(o.vol) + " " + syminfo.currency + "\nRVOL: " + str.tostring(o.rvol, "#.##") + "X\nDelta estimado: " + (o.delta >= 0 ? "+" : "") + str.tostring(o.delta, "#.#") + "%\nDominancia: " + f_dom(o.delta) + "\nDesplazamiento: " + str.tostring(o.disp, "#.##") + " ATR | " + dq + "\nFVG asociado: " + (f_hasFvg(o) ? "SÍ" : "NO")
+    string t3 = "\n\nESTADO\nDisponible: " + str.tostring(f_integ(o.maxFill), "#") + "%\nConsumido: " + str.tostring(o.maxFill, "#") + "%\nVisitas acumuladas: " + str.tostring(o.visits)
+    string t4 = "\n\nCOMPONENTES DEL SCORE\nOrder Flow: " + str.tostring(cOF, "#") + "/100\nDesplazamiento: " + str.tostring(cDS, "#") + "/100\nFrescura: " + str.tostring(cFR, "#") + "/100\nRVOL: " + str.tostring(cRV, "#") + "/100\nFVG: " + str.tostring(cFV, "#") + "/100\nNota: El score mide calidad de configuración, no probabilidad de éxito."
+    t1 + t2 + t3 + t4 + "\n\nLECTURA\n" + rd + warn
+
+f_fzTip(FZ f) =>
+    float integ = f_integ(f.maxFill)
+    string rd = integ >= 75 ? "Gap casi intacto: zona de liquidez con alta concentración de órdenes. Vigila la reacción del precio en una temporalidad menor." : integ >= 40 ? "Gap parcialmente rellenado: queda menos liquidez pendiente. Úsalo solo como confluencia." : "Gap casi consumido: poca liquidez restante."
+    string t1 = "ANÁLISIS DEL FVG\nDirección: " + (f.bull ? "ALCISTA" : "BAJISTA") + "\nCalidad: " + f.strength
+    string t2 = "\n\nFORMACIÓN\nVolumen: " + f_volFmt(f.vol) + " " + syminfo.currency + "\nRVOL: " + str.tostring(f.rvol, "#.##") + "X\nDelta estimado: " + (f.delta >= 0 ? "+" : "") + str.tostring(f.delta, "#.#") + "%\nDominancia: " + f_dom(f.delta)
+    string t3 = "\n\nESTADO\nDisponible: " + str.tostring(integ, "#") + "%\nConsumido: " + str.tostring(f.maxFill, "#") + "%"
+    t1 + t2 + t3 + "\n\nLECTURA\n" + rd
+
+f_obOne(OB o) =>
+    "• " + (o.swing ? "SWING " : "") + (o.breaker ? "BREAKER " : "OB ") + (o.bull ? "ALCISTA" : "BAJISTA") + " | " + o.strength + " | VOL " + f_volFmt(o.vol) + " | Δ " + (o.delta >= 0 ? "+" : "") + str.tostring(o.delta, "#") + "% | " + pctMode + " " + str.tostring(f_integ(o.maxFill), "#") + "%"
+
+f_fzOne(FZ f) =>
+    "• FVG " + (f.bull ? "ALCISTA" : "BAJISTA") + " | " + f.strength + " | VOL " + f_volFmt(f.vol) + " | Δ " + (f.delta >= 0 ? "+" : "") + str.tostring(f.delta, "#") + "% | " + pctMode + " " + str.tostring(f_integ(f.maxFill), "#") + "%"
+
+f_obText(OB o) =>
+    l1 = o.breaker ? ("BREAKER (ex-" + (o.bull ? "soporte" : "resistencia") + ") | " + (o.bull ? "RESISTENCIA" : "SOPORTE")) : ((o.swing ? "SWING " : "") + (o.mergeCount > 1 ? "ZONA " : "") + (o.bull ? "OB ALCISTA" : "OB BAJISTA") + (o.mergeCount > 1 ? " x" + str.tostring(o.mergeCount) : "") + " | " + o.strength)
+    l2 = "VOL " + f_volFmt(o.vol) + " " + syminfo.currency + " | RVOL " + str.tostring(o.rvol, "#.##") + "X"
+    l3 = "Δ " + (o.delta >= 0 ? "+" : "") + str.tostring(o.delta, "#.#") + "%" + (showDom and not o.breaker ? " | DOM. " + f_dom(o.delta) : "") + " | " + pctMode + " " + str.tostring(f_integ(o.maxFill), "#") + "%"
+    l1 + "\n" + l2 + "\n" + l3
+
+if bosUp
+    best = 0.0
+    bestI = 1
+    legUp = obLegOnly and not na(lPLb) ? math.max(1, math.min(lookback, bar_index - lPLb)) : math.max(1, math.min(lookback, bar_index))
+    for i = 1 to legUp
+        d = open[i] - close[i]
+        if d > best
+            best := d
+            bestI := i
+    if best > 0 and (not useATRFilter or best >= atr[bestI] * minATRMult)
+        inst = volume[bestI] > vMA[bestI] * whaleMult
+        rvolVal = vMA[bestI] != 0 ? volume[bestI] / vMA[bestI] : 0.0
+        strengthTxt = rvolVal >= rvolFuerte ? "FUERTE" : rvolVal >= rvolModerado ? "MODERADO" : "DÉBIL"
+        volVal = volume[bestI] * hlc3[bestI]
+        deltaVal = f_legDelta(bestI)
+        dispVal = f_legDisp(bestI, open[bestI] > close[bestI])
+        newTop = open[bestI]
+        newBot = close[bestI]
+        mergeIdx = -1
+        if obs.size() > 0
+            for mi = 0 to obs.size() - 1
+                OB mob = obs.get(mi)
+                if not mob.mit and not mob.breaker and mob.bull and mob.top >= newBot and mob.bot <= newTop
+                    mergeIdx := mi
+                    break
+        if mergeIdx >= 0
+            OB mob = obs.get(mergeIdx)
+            mob.top := math.max(mob.top, newTop)
+            mob.bot := math.min(mob.bot, newBot)
+            mob.mergeCount := mob.mergeCount + 1
+            mob.swing := mob.swing or (bar_index - (mob.bull ? lastBigUp : lastBigDn) <= 2)
+            mob.disp := math.max(mob.disp, dispVal)
+            mob.maxFill := 0.0
+            if inst
+                mob.inst := true
+            if rvolVal > mob.rvol
+                mob.rvol := rvolVal
+                mob.strength := strengthTxt
+                mob.vol := volVal
+                mob.delta := deltaVal
+            if not na(mob.bx)
+                box.set_top(mob.bx, mob.top)
+                box.set_bottom(mob.bx, mob.bot)
+                box.set_bgcolor(mob.bx, showZoneInfoBox ? f_strengthCol(mob.strength, true, mob.inst and instBorder ? 75 : 90) : bullOBcol)
+        else if rvolVal >= obMinRvol
+            instTransBull = inst and instBorder ? 75 : 90
+            obs.push(OB.new(showOB ? box.new(bar_index - bestI, open[bestI], extendUntilMit ? bar_index + 1 : bar_index - bestI + obExtendBars, close[bestI], bgcolor=showZoneInfoBox ? f_strengthCol(strengthTxt, true, instTransBull) : bullOBcol, border_width=0) : na, open[bestI], close[bestI], true, false, false, inst, showOB and showInstTag and inst ? label.new(bar_index - bestI, close[bestI], "🐋", style=label.style_none, textcolor=whaleBuyColor, size=size.tiny) : na, na, rvolVal, strengthTxt, 1, 0.0, volVal, deltaVal, swingUpNow, false, dispVal, 0, false, bar_index))
+
+if bosDn
+    best = 0.0
+    bestI = 1
+    legDn = obLegOnly and not na(lPHb) ? math.max(1, math.min(lookback, bar_index - lPHb)) : math.max(1, math.min(lookback, bar_index))
+    for i = 1 to legDn
+        d = close[i] - open[i]
+        if d > best
+            best := d
+            bestI := i
+    if best > 0 and (not useATRFilter or best >= atr[bestI] * minATRMult)
+        inst = volume[bestI] > vMA[bestI] * whaleMult
+        rvolVal = vMA[bestI] != 0 ? volume[bestI] / vMA[bestI] : 0.0
+        strengthTxt = rvolVal >= rvolFuerte ? "FUERTE" : rvolVal >= rvolModerado ? "MODERADO" : "DÉBIL"
+        volVal = volume[bestI] * hlc3[bestI]
+        deltaVal = f_legDelta(bestI)
+        dispVal = f_legDisp(bestI, open[bestI] > close[bestI])
+        newTop = close[bestI]
+        newBot = open[bestI]
+        mergeIdx = -1
+        if obs.size() > 0
+            for mi = 0 to obs.size() - 1
+                OB mob = obs.get(mi)
+                if not mob.mit and not mob.breaker and not mob.bull and mob.top >= newBot and mob.bot <= newTop
+                    mergeIdx := mi
+                    break
+        if mergeIdx >= 0
+            OB mob = obs.get(mergeIdx)
+            mob.top := math.max(mob.top, newTop)
+            mob.bot := math.min(mob.bot, newBot)
+            mob.mergeCount := mob.mergeCount + 1
+            mob.swing := mob.swing or (bar_index - (mob.bull ? lastBigUp : lastBigDn) <= 2)
+            mob.disp := math.max(mob.disp, dispVal)
+            mob.maxFill := 0.0
+            if inst
+                mob.inst := true
+            if rvolVal > mob.rvol
+                mob.rvol := rvolVal
+                mob.strength := strengthTxt
+                mob.vol := volVal
+                mob.delta := deltaVal
+            if not na(mob.bx)
+                box.set_top(mob.bx, mob.top)
+                box.set_bottom(mob.bx, mob.bot)
+                box.set_bgcolor(mob.bx, showZoneInfoBox ? f_strengthCol(mob.strength, false, mob.inst and instBorder ? 75 : 90) : bearOBcol)
+        else if rvolVal >= obMinRvol
+            instTransBear = inst and instBorder ? 75 : 90
+            obs.push(OB.new(showOB ? box.new(bar_index - bestI, close[bestI], extendUntilMit ? bar_index + 1 : bar_index - bestI + obExtendBars, open[bestI], bgcolor=showZoneInfoBox ? f_strengthCol(strengthTxt, false, instTransBear) : bearOBcol, border_width=0) : na, close[bestI], open[bestI], false, false, false, inst, showOB and showInstTag and inst ? label.new(bar_index - bestI, close[bestI], "🐋", style=label.style_none, textcolor=whaleSellColor, size=size.tiny) : na, na, rvolVal, strengthTxt, 1, 0.0, volVal, deltaVal, swingDnNow, false, dispVal, 0, false, bar_index))
+
+bool bullTouch = false
+bool bearTouch = false
+float bullBot = na
+float bearTop = na
+bool pbNow = false
+var label lastPBLbl = na
+
+iOB = obs.size() - 1
+while iOB >= 0
+    OB o = obs.get(iOB)
+    removed = false
+    justBroke = false
+    if not o.breaker and bar_index > o.born
+        inNow = low <= o.top and high >= o.bot
+        if inNow and not o.wasIn
+            o.visits := o.visits + 1
+        o.wasIn := inNow
+    // 1) Breaker: el precio cerró al otro lado de la zona (antes se borraba sin llegar a mostrarse)
+    if not o.breaker and showBreakers and (o.bull ? close < o.bot : close > o.top)
+        o.breaker := true
+        o.mit := false
+        justBroke := true
+        if not na(o.bx)
+            box.set_bgcolor(o.bx, o.bull ? bullBRcol : bearBRcol)
+            box.set_border_style(o.bx, line.style_dashed)
+            box.set_border_color(o.bx, color.new(o.bull ? color.blue : color.purple, 60))
+            box.set_border_width(o.bx, 1)
+            if showBRLabel and na(o.brTag)
+                o.brTag := label.new(bar_index, o.bull ? o.bot : o.top, "BR", style=label.style_none, textcolor=o.bull ? color.blue : color.purple, size=size.tiny)
+    // 2) Toque de la zona (OB: entrada desde su lado; breaker: reentrada desde el lado contrario)
+    touched = not justBroke and not o.mit and (o.breaker ? (o.bull ? high >= o.bot : low <= o.top) : (o.bull ? low <= o.top : high >= o.bot))
+    if touched
+        if o.breaker
+            o.mit := true
+        else
+            if showPB and not pbNow and not o.pbDone
+                if not na(lastPBLbl)
+                    label.delete(lastPBLbl)
+                if o.bull
+                    lastPBLbl := label.new(bar_index, o.bot, "PB", style=label.style_label_up, color=color.new(color.teal, 30), textcolor=color.white, size=size.tiny)
+                else
+                    lastPBLbl := label.new(bar_index, o.top, "PB", style=label.style_label_down, color=color.new(color.red, 30), textcolor=color.white, size=size.tiny)
+                pbNow := true
+            o.pbDone := true
+            strOK = not requireZoneStrength or o.strength != "DÉBIL"
+            domOK = not requireDomOK or (o.bull ? o.delta > -domTh : o.delta < domTh)
+            rejOK = not requireReject or (o.bull ? (close > open and close >= o.bot) : (close < open and close <= o.top))
+            if not strOK or not domOK
+                o.mit := true
+            else if rejOK
+                o.mit := true
+                if o.bull and not bullTouch
+                    bullTouch := true
+                    bullBot := o.bot
+                if not o.bull and not bearTouch
+                    bearTouch := true
+                    bearTop := o.top
+    fullyFilled = o.breaker ? (o.bull ? close >= o.top : close <= o.bot) : (o.bull ? close <= o.bot : close >= o.top)
+    if fullyFilled and not o.mit
+        o.mit := true
+    if o.mit and (o.breaker ? (hideMitigated and delBreakers) : (fullyFilled and hideMitigated))
+        if not na(o.bx)
+            box.delete(o.bx)
+        if not na(o.tag)
+            label.delete(o.tag)
+        if not na(o.brTag)
+            label.delete(o.brTag)
+        obs.remove(iOB)
+        removed := true
+    if not removed
+        if not o.breaker
+            if fullyFilled
+                o.maxFill := 100.0
+            else
+                curFill = o.bull ? (low <= o.top ? math.max(0.0, math.min(100.0, (o.top - low) / (o.top - o.bot) * 100)) : 0.0) : (high >= o.bot ? math.max(0.0, math.min(100.0, (high - o.bot) / (o.top - o.bot) * 100)) : 0.0)
+                o.maxFill := math.max(o.maxFill, curFill)
+            if scoreStrength
+                o.strength := f_obStrengthTxt(o)
+        if extendUntilMit and not fullyFilled and not (o.breaker and o.mit) and not na(o.bx)
+            box.set_right(o.bx, bar_index + 1)
+    iOB -= 1
+
+while obs.size() > maxOBs
+    OB old = obs.shift()
+    if not na(old.bx)
+        box.delete(old.bx)
+    if not na(old.tag)
+        label.delete(old.tag)
+    if not na(old.brTag)
+        label.delete(old.brTag)
+
+bullIn = false
+bullNear = false
+bearIn = false
+bearNear = false
+curZoneStrength = ""
+curZoneRVOL = 0.0
+curZoneDom = ""
+curZoneInteg = 100.0
+
+if obs.size() > 0
+    for idx = 0 to obs.size() - 1
+        OB z = obs.get(idx)
+        if not z.mit and not z.breaker
+            if z.bull
+                if close <= z.top and close >= z.bot
+                    bullIn := true
+                    curZoneStrength := z.strength
+                    curZoneRVOL := z.rvol
+                    curZoneDom := f_dom(z.delta)
+                    curZoneInteg := f_integ(z.maxFill)
+                else if close > z.top and (close - z.top) <= atr * nearMult
+                    bullNear := true
+                    curZoneStrength := z.strength
+                    curZoneRVOL := z.rvol
+                    curZoneDom := f_dom(z.delta)
+                    curZoneInteg := f_integ(z.maxFill)
+            else
+                if close >= z.bot and close <= z.top
+                    bearIn := true
+                    curZoneStrength := z.strength
+                    curZoneRVOL := z.rvol
+                    curZoneDom := f_dom(z.delta)
+                    curZoneInteg := f_integ(z.maxFill)
+                else if close < z.bot and (z.bot - close) <= atr * nearMult
+                    bearNear := true
+                    curZoneStrength := z.strength
+                    curZoneRVOL := z.rvol
+                    curZoneDom := f_dom(z.delta)
+                    curZoneInteg := f_integ(z.maxFill)
+
+f_fzText(FZ f) =>
+    l1 = (f.bull ? "FVG ALCISTA" : "FVG BAJISTA") + " | " + f.strength
+    l2 = "VOL " + f_volFmt(f.vol) + " " + syminfo.currency + " | RVOL " + str.tostring(f.rvol, "#.##") + "X"
+    l3 = "Δ " + (f.delta >= 0 ? "+" : "") + str.tostring(f.delta, "#.#") + "%" + (showDom ? " | DOM. " + f_dom(f.delta) : "") + " | " + pctMode + " " + str.tostring(f_integ(f.maxFill), "#") + "%"
+    l1 + "\n" + l2 + "\n" + l3
+
+if showFVG and low > high[2]
+    rvolValFB = vMA[1] != 0 ? volume[1] / vMA[1] : 0.0
+    strengthTxtFB = rvolValFB >= rvolFuerte ? "FUERTE" : rvolValFB >= rvolModerado ? "MODERADO" : "DÉBIL"
+    volValFB = volume[1] * hlc3[1]
+    deltaValFB = (high[1] - low[1]) != 0 ? (close[1] - open[1]) / (high[1] - low[1]) * 100 : 0.0
+    fzs.push(FZ.new(box.new(bar_index - 2, low, extendUntilMit ? bar_index + 1 : bar_index + obExtendBars, high[2], bgcolor=showZoneInfoBox ? f_strengthCol(strengthTxtFB, true, 93) : fvgBullCol, border_width=0), low, high[2], true, false, rvolValFB, strengthTxtFB, 0.0, volValFB, deltaValFB, false, bar_index))
+if showFVG and high < low[2]
+    rvolValFB = vMA[1] != 0 ? volume[1] / vMA[1] : 0.0
+    strengthTxtFB = rvolValFB >= rvolFuerte ? "FUERTE" : rvolValFB >= rvolModerado ? "MODERADO" : "DÉBIL"
+    volValFB = volume[1] * hlc3[1]
+    deltaValFB = (high[1] - low[1]) != 0 ? (close[1] - open[1]) / (high[1] - low[1]) * 100 : 0.0
+    fzs.push(FZ.new(box.new(bar_index - 2, low[2], extendUntilMit ? bar_index + 1 : bar_index + obExtendBars, high, bgcolor=showZoneInfoBox ? f_strengthCol(strengthTxtFB, false, 93) : fvgBearCol, border_width=0), low[2], high, false, false, rvolValFB, strengthTxtFB, 0.0, volValFB, deltaValFB, false, bar_index))
+
+j = fzs.size() - 1
+while j >= 0
+    FZ f = fzs.get(j)
+    mit = f.bull ? low <= f.bot : high >= f.top
+    enterF = f.bull ? low <= f.top : high >= f.bot
+    if fvgSignals and enterF and not f.touched and bar_index > f.born
+        fStrOK = not requireZoneStrength or f.strength != "DÉBIL"
+        fDomOK = not requireDomOK or (f.bull ? f.delta > -domTh : f.delta < domTh)
+        fRejOK = not requireReject or (f.bull ? (close > open and close >= f.bot) : (close < open and close <= f.top))
+        if not fStrOK or not fDomOK
+            f.touched := true
+        else if fRejOK
+            f.touched := true
+            if f.bull and not bullTouch
+                bullTouch := true
+                bullBot := f.bot
+            if not f.bull and not bearTouch
+                bearTouch := true
+                bearTop := f.top
+    if mit and not f.mit
+        f.mit := true
+        if showPB and not pbNow
+            if not na(lastPBLbl)
+                label.delete(lastPBLbl)
+            if f.bull
+                lastPBLbl := label.new(bar_index, f.bot, "PB", style=label.style_label_up, color=color.new(color.teal, 30), textcolor=color.white, size=size.tiny)
+            else
+                lastPBLbl := label.new(bar_index, f.top, "PB", style=label.style_label_down, color=color.new(color.red, 30), textcolor=color.white, size=size.tiny)
+            pbNow := true
+        if hideMitigated
+            box.delete(f.bx)
+            fzs.remove(j)
+        else
+            box.set_bgcolor(f.bx, color.new(f.bull ? color.teal : color.red, 97))
+            box.set_right(f.bx, bar_index)
+    if not f.mit and extendUntilMit
+        box.set_right(f.bx, bar_index + 1)
+    if not f.mit and not na(f.bx)
+        curFillF = f.bull ? (low <= f.top ? math.max(0.0, math.min(100.0, (f.top - low) / (f.top - f.bot) * 100)) : 0.0) : (high >= f.bot ? math.max(0.0, math.min(100.0, (high - f.bot) / (f.top - f.bot) * 100)) : 0.0)
+        f.maxFill := math.max(f.maxFill, curFillF)
+    j -= 1
+
+while fzs.size() > maxFZs
+    FZ old = fzs.shift()
+    box.delete(old.bx)
+
+bullFIn = false
+bullFNear = false
+bearFIn = false
+bearFNear = false
+
+if fzs.size() > 0
+    for idx = 0 to fzs.size() - 1
+        FZ z = fzs.get(idx)
+        if not z.mit
+            if z.bull
+                if close <= z.top and close >= z.bot
+                    bullFIn := true
+                else if close > z.top and (close - z.top) <= atr * nearMult
+                    bullFNear := true
+            else
+                if close >= z.bot and close <= z.top
+                    bearFIn := true
+                else if close < z.bot and (z.bot - close) <= atr * nearMult
+                    bearFNear := true
+
+// Tarjeta de info: una sola por grupo de zonas cercanas o solapadas (el OB tiene prioridad sobre el FVG).
+// Caja de tamaño medio y alejada del precio = texto DENTRO de la caja. Caja chica (el texto no entra), enorme (queda fuera de pantalla y el relleno
+// tapa las velas) o pegada al precio (se amontonan velas y etiquetas) = tarjeta a la derecha del precio.
+// Las tarjetas laterales se juntan en UNA sola etiqueta (las 2 zonas más cercanas al precio) para no pisarse.
+var array<label> infoLbls = array.new<label>()
+if barstate.islast
+    while infoLbls.size() > 0
+        label.delete(infoLbls.pop())
+    array<float> zMid = array.new<float>()
+    array<float> zRv = array.new<float>()
+    array<float> zH = array.new<float>()
+    array<bool> zIsOB = array.new<bool>()
+    array<int> zIdx = array.new<int>()
+    array<float> sMid = array.new<float>()
+    array<string> sTx = array.new<string>()
+    array<color> sCol = array.new<color>()
+    array<string> sTip = array.new<string>()
+    array<string> sTipOne = array.new<string>()
+    if obs.size() > 0
+        for idx = 0 to obs.size() - 1
+            OB zo = obs.get(idx)
+            if not na(zo.bx)
+                box.set_text(zo.bx, "")
+                if zo.breaker
+                    box.set_bgcolor(zo.bx, zo.bull ? bullBRcol : bearBRcol)
+                else
+                    int trZ = f_integ(zo.maxFill) < dimInteg ? 96 : (zo.inst and instBorder ? 75 : 90)
+                    box.set_bgcolor(zo.bx, showZoneInfoBox ? f_strengthCol(zo.strength, zo.bull, trZ) : (zo.bull ? bullOBcol : bearOBcol))
+                    box.set_border_color(zo.bx, zo.swing ? color.new(zo.bull ? color.green : color.red, 25) : color.new(color.gray, 100))
+                    box.set_border_width(zo.bx, zo.swing ? 2 : 0)
+                if not (zo.breaker ? (zo.bull ? close >= zo.top : close <= zo.bot) : (zo.bull ? close <= zo.bot : close >= zo.top))
+                    zMid.push((zo.top + zo.bot) / 2)
+                    zRv.push(zo.rvol + 1000.0)
+                    zH.push(zo.top - zo.bot)
+                    zIsOB.push(true)
+                    zIdx.push(idx)
+    if fzs.size() > 0
+        for idx = 0 to fzs.size() - 1
+            FZ zf = fzs.get(idx)
+            if not na(zf.bx)
+                box.set_text(zf.bx, showFvgPct ? str.tostring(f_integ(zf.maxFill), "#") + "%" : "")
+                box.set_text_color(zf.bx, color.new(color.white, 15))
+                box.set_text_size(zf.bx, size.tiny)
+                box.set_text_halign(zf.bx, text.align_right)
+                box.set_text_valign(zf.bx, text.align_center)
+                box.set_bgcolor(zf.bx, showZoneInfoBox ? f_strengthCol(zf.strength, zf.bull, 93) : (zf.bull ? fvgBullCol : fvgBearCol))
+                if not zf.mit
+                    zMid.push((zf.top + zf.bot) / 2)
+                    zRv.push(zf.rvol)
+                    zH.push(zf.top - zf.bot)
+                    zIsOB.push(false)
+                    zIdx.push(idx)
+    nZ = zMid.size()
+    if nZ > 0
+        array<int> sidx = zMid.sort_indices(order.ascending)
+        int startK = 0
+        for k = 0 to nZ - 1
+            bool brk = k == nZ - 1
+            if not brk
+                float gapMid = zMid.get(sidx.get(k + 1)) - zMid.get(sidx.get(k))
+                float halfH = (zH.get(sidx.get(k)) + zH.get(sidx.get(k + 1))) / 2
+                brk := gapMid > atr * clusterATR and gapMid > halfH
+            if brk
+                int members = k - startK + 1
+                int bestM = sidx.get(startK)
+                float bestRv = -1.0
+                for m = startK to k
+                    int ix = sidx.get(m)
+                    if zRv.get(ix) > bestRv
+                        bestRv := zRv.get(ix)
+                        bestM := ix
+                string tx = ""
+                string tp = ""
+                string tpOne = ""
+                color cc = color.new(color.gray, 10)
+                box bxR = na
+                float hgt = 0.0
+                float midP = 0.0
+                if zIsOB.get(bestM)
+                    OB ro = obs.get(zIdx.get(bestM))
+                    tx := f_obText(ro)
+                    cc := ro.breaker ? color.new(ro.bull ? color.blue : color.purple, 10) : f_strengthCol(ro.strength, ro.bull, 10)
+                    bxR := ro.bx
+                    hgt := ro.top - ro.bot
+                    midP := (ro.top + ro.bot) / 2
+                else
+                    FZ rf = fzs.get(zIdx.get(bestM))
+                    tx := f_fzText(rf)
+                    cc := f_strengthCol(rf.strength, rf.bull, 10)
+                    bxR := rf.bx
+                    hgt := rf.top - rf.bot
+                    midP := (rf.top + rf.bot) / 2
+                if members > 1
+                    tx := "[" + str.tostring(members) + " zonas] " + tx
+                if showTips
+                    tp := zIsOB.get(bestM) ? f_obTip(obs.get(zIdx.get(bestM))) : f_fzTip(fzs.get(zIdx.get(bestM)))
+                    tpOne := zIsOB.get(bestM) ? f_obOne(obs.get(zIdx.get(bestM))) : f_fzOne(fzs.get(zIdx.get(bestM)))
+                    if members > 1
+                        int extraTips = 0
+                        for m = startK to k
+                            int ixm = sidx.get(m)
+                            if ixm != bestM and extraTips < 4
+                                tp := tp + (extraTips == 0 ? "\n\nOTRAS ZONAS AGRUPADAS:" : "") + "\n" + (zIsOB.get(ixm) ? f_obOne(obs.get(zIdx.get(ixm))) : f_fzOne(fzs.get(zIdx.get(ixm))))
+                                extraTips += 1
+                if hgt >= atr * cardMinATR and hgt <= atr * cardMaxATR and math.abs(midP - close) > atr * cardNearATR
+                    if not na(bxR)
+                        box.set_bgcolor(bxR, cc)
+                        box.set_text(bxR, tx)
+                        box.set_text_color(bxR, color.white)
+                        box.set_text_size(bxR, size.small)
+                        box.set_text_halign(bxR, text.align_right)
+                        box.set_text_valign(bxR, text.align_center)
+                    if showTips
+                        infoLbls.push(label.new(bar_index + 1, midP, "ⓘ", style=label.style_label_left, color=cc, textcolor=color.white, size=size.small, tooltip=tp))
+                else
+                    sMid.push(midP)
+                    sTx.push(tx)
+                    sCol.push(cc)
+                    sTip.push(tp)
+                    sTipOne.push(tpOne)
+                startK := k + 1
+    nS = sMid.size()
+    if nS > 0
+        int i1 = 0
+        float d1 = math.abs(sMid.get(0) - close)
+        for q = 0 to nS - 1
+            float dq1 = math.abs(sMid.get(q) - close)
+            if dq1 < d1
+                d1 := dq1
+                i1 := q
+        string txS = sTx.get(i1)
+        string tipS = sTip.get(i1)
+        if nS > 1
+            int i2 = -1
+            float d2 = 1000000000.0
+            for q = 0 to nS - 1
+                if q != i1
+                    float dq2 = math.abs(sMid.get(q) - close)
+                    if dq2 < d2
+                        d2 := dq2
+                        i2 := q
+            if i2 >= 0
+                txS := txS + "\n――――――――――\n" + sTx.get(i2)
+                tipS := tipS + "\n\nSIGUIENTE ZONA:\n" + sTipOne.get(i2)
+        infoLbls.push(label.new(bar_index + infoLblOffset, sMid.get(i1), txS, style=label.style_label_left, color=sCol.get(i1), textcolor=color.white, size=size.small, tooltip=showTips ? tipS : ""))
+
+inAsia = not na(time(timeframe.period, sessAsia, tz))
+inLDN  = not na(time(timeframe.period, sessLDN, tz))
+inNYs  = not na(time(timeframe.period, sessNY, tz))
+sessOK = not useSessFilter or (allowAsia and inAsia) or (allowLDN and inLDN) or (allowNY and inNYs)
+
+var float aMax = na
+var float aMin = na
+var int aBar = na
+var float ldMax = na
+var float ldMin = na
+var int ldBar = na
+var float nMax = na
+var float nMin = na
+var int nBar = na
+var line aMaxL = na
+var line aMinL = na
+var line ldMaxL = na
+var line ldMinL = na
+var line nMaxL = na
+var line nMinL = na
+var label aMaxT = na
+var label aMinT = na
+var label ldMaxT = na
+var label ldMinT = na
+var label nMaxT = na
+var label nMinT = na
+
+f_line(int x, float y, color col) =>
+    line.new(x, y, bar_index, y, extend=extend.right, color=col, style=line.style_dashed, width=1)
+
+f_lbl(float y, string txt, color col, bool above) =>
+    label.new(bar_index - 2, y, txt, style=above ? label.style_label_down : label.style_label_up, color=col, textcolor=color.white, size=lblSize)
+
+if inAsia and not inAsia[1]
+    aMax := high
+    aMin := low
+    aBar := bar_index
+if inAsia
+    aMax := math.max(aMax, high)
+    aMin := math.min(aMin, low)
+if not inAsia and inAsia[1] and showSessLevels
+    if not na(aMaxL)
+        line.delete(aMaxL)
+        label.delete(aMaxT)
+        line.delete(aMinL)
+        label.delete(aMinT)
+    aMaxL := f_line(aBar, aMax, asiaCol)
+    aMaxT := f_lbl(aMax, "Asia Máx", asiaCol, true)
+    aMinL := f_line(aBar, aMin, asiaCol)
+    aMinT := f_lbl(aMin, "Asia Mín", asiaCol, false)
+
+if inLDN and not inLDN[1]
+    ldMax := high
+    ldMin := low
+    ldBar := bar_index
+if inLDN
+    ldMax := math.max(ldMax, high)
+    ldMin := math.min(ldMin, low)
+if not inLDN and inLDN[1] and showSessLevels
+    if not na(ldMaxL)
+        line.delete(ldMaxL)
+        label.delete(ldMaxT)
+        line.delete(ldMinL)
+        label.delete(ldMinT)
+    ldMaxL := f_line(ldBar, ldMax, ldnCol)
+    ldMaxT := f_lbl(ldMax, "Londres Máx", ldnCol, true)
+    ldMinL := f_line(ldBar, ldMin, ldnCol)
+    ldMinT := f_lbl(ldMin, "Londres Mín", ldnCol, false)
+
+if inNYs and not inNYs[1]
+    nMax := high
+    nMin := low
+    nBar := bar_index
+if inNYs
+    nMax := math.max(nMax, high)
+    nMin := math.min(nMin, low)
+if not inNYs and inNYs[1] and showSessLevels
+    if not na(nMaxL)
+        line.delete(nMaxL)
+        label.delete(nMaxT)
+        line.delete(nMinL)
+        label.delete(nMinT)
+    nMaxL := f_line(nBar, nMax, nyCol)
+    nMaxT := f_lbl(nMax, "NY Máx", nyCol, true)
+    nMinL := f_line(nBar, nMin, nyCol)
+    nMinT := f_lbl(nMin, "NY Mín", nyCol, false)
+
+pdh = request.security(syminfo.tickerid, "D", high[1], lookahead=barmerge.lookahead_on)
+pdl = request.security(syminfo.tickerid, "D", low[1], lookahead=barmerge.lookahead_on)
+plot(showPDH ? pdh : na, "MÁX. ANTERIOR", color=color.new(color.white, 30), linewidth=1, style=plot.style_linebr)
+plot(showPDL ? pdl : na, "MÍN. ANTERIOR", color=color.new(color.white, 30), linewidth=1, style=plot.style_linebr)
+
+var label pdhT = na
+var label pdlT = na
+if showPDH and not mobileMode and newDay
+    if not na(pdhT)
+        label.delete(pdhT)
+    pdhT := label.new(bar_index, pdh, "MÁX. ANTERIOR", style=label.style_label_left, color=color.new(color.black, 40), textcolor=color.white, size=lblSize)
+
+if showPDL and not mobileMode and newDay
+    if not na(pdlT)
+        label.delete(pdlT)
+    pdlT := label.new(bar_index, pdl, "MÍN. ANTERIOR", style=label.style_label_left, color=color.new(color.black, 40), textcolor=color.white, size=lblSize)
+
+eq = (lPH + lPL) / 2
+plot(showEQ ? eq : na, "Equilibrium", color.new(color.white, 55), 1, plot.style_linebr)
+plot(showRotura ? lPH : na, "Rotura Long (gatillo)", color.new(color.green, 30), 1, plot.style_linebr)
+plot(showRotura ? lPL : na, "Rotura Short (gatillo)", color.new(color.red, 30), 1, plot.style_linebr)
+
+isPremium = close > eq
+var label pdLbl = na
+if showPremDisc and barstate.islast
+    if not na(pdLbl)
+        label.delete(pdLbl)
+    pdLbl := label.new(bar_index + 2, close, isPremium ? "PREMIUM" : "DESCUENTO", style=label.style_label_left, color=isPremium ? color.new(color.red, 40) : color.new(color.teal, 40), textcolor=color.white, size=lblSize)
+
+whale = volume > vMA * whaleMult
+whaleBuy = whale and close > open
+whaleSell = whale and close < open
+bsWhaleBuy = ta.barssince(whaleBuy)
+bsWhaleSell = ta.barssince(whaleSell)
+whaleBuyRec = not na(bsWhaleBuy) and bsWhaleBuy <= whaleLookback
+whaleSellRec = not na(bsWhaleSell) and bsWhaleSell <= whaleLookback
+barcolor(showWhales and whaleBuy ? whaleBuyColor : na, title="Ballena alcista (amarillo fluor)")
+barcolor(showWhales and whaleSell ? whaleSellColor : na, title="Ballena bajista (fucsia)")
+
+setupBullA = (bullIn or bullNear or bullFIn or bullFNear) and whaleBuyRec
+setupBearA = (bearIn or bearNear or bearFIn or bearFNear) and whaleSellRec
+
+var int tDir = 0
+var int tStage = 0
+var float tEntry = na
+var float tRisk = na
+var float tTP = na
+var float tTP2 = na
+var float tTP3 = na
+var float tSL = na
+var bool tBE = false
+var bool tOpen = false
+var line lEntry = na
+var line lTP = na
+var line lSL = na
+var label lbE = na
+var label lbT = na
+var label lbS = na
+var label lbSig = na
+var box bRisk = na
+var box bRew = na
+var int sSig = 0
+var int sTP1 = 0
+var int sTP2 = 0
+var int sTP3 = 0
+var int sSL = 0
+var int sBE = 0
+var int tBar = -1
+var float sCostR = 0.0
+
+// Conexión con el oscilador: puntaje mínimo y, opcionalmente, señal reciente en la misma dirección
+linkValid = not na(srcOscSig) and not na(srcOscScoreL) and not na(srcOscScoreS) and srcOscScoreL >= 0 and srcOscScoreL <= 100 and srcOscScoreS >= 0 and srcOscScoreS <= 100 and (srcOscSig == 1 or srcOscSig == -1 or srcOscSig == 0)
+bsOscL = ta.barssince(srcOscSig == 1)
+bsOscS = ta.barssince(srcOscSig == -1)
+oscSigRecL = not na(bsOscL) and bsOscL <= linkWindow
+oscSigRecS = not na(bsOscS) and bsOscS <= linkWindow
+linkActive = useOscLink and linkValid
+linkLongOK  = not linkActive or (srcOscScoreL >= minLinkScore and (not requireOscSig or oscSigRecL))
+linkShortOK = not linkActive or (srcOscScoreS >= minLinkScore and (not requireOscSig or oscSigRecS))
+
+bullSig = tDir == 0 and bullTouch and (not useCombined or linkActive or oscOS) and exhBullOK and adxOK and htfBullOK and ctxLongOK and sweepOKBull and sessOK and linkLongOK
+bearSig = tDir == 0 and bearTouch and (not useCombined or linkActive or oscOB) and exhBearOK and adxOK and htfBearOK and ctxShortOK and sweepOKBear and sessOK and linkShortOK
+
+// Por qué una zona tocada no dio señal
+string whyBull = ""
+string whyBear = ""
+if showWhy and bullTouch and not bullSig
+    whyBull := (tDir != 0 ? "operación-abierta " : "") + (useCombined and not linkActive and not oscOS ? "oscilador " : "") + (not exhBullOK ? "agotamiento " : "") + (not adxOK ? "ADX " : "") + (not htfBullOK ? "sesgo-HTF " : "") + (not ctxLongOK ? "contexto " : "") + (not sweepOKBull ? "barrido " : "") + (not sessOK ? "sesión " : "") + (not linkLongOK ? "puntaje-osc " : "")
+if showWhy and bearTouch and not bearSig
+    whyBear := (tDir != 0 ? "operación-abierta " : "") + (useCombined and not linkActive and not oscOB ? "oscilador " : "") + (not exhBearOK ? "agotamiento " : "") + (not adxOK ? "ADX " : "") + (not htfBearOK ? "sesgo-HTF " : "") + (not ctxShortOK ? "contexto " : "") + (not sweepOKBear ? "barrido " : "") + (not sessOK ? "sesión " : "") + (not linkShortOK ? "puntaje-osc " : "")
+if whyBull != ""
+    label.new(bar_index, low, "LONG ⛔ " + whyBull, style=label.style_label_up, color=color.new(color.gray, 25), textcolor=color.white, size=size.tiny)
+if whyBear != ""
+    label.new(bar_index, high, "SHORT ⛔ " + whyBear, style=label.style_label_down, color=color.new(color.gray, 25), textcolor=color.white, size=size.tiny)
+
+if bullSig
+    tDir := 1
+    tBar := bar_index
+    tStage := 1
+    tEntry := close
+    tBE := false
+    rawSL = bullBot - atr * slBuffer
+    extLq = extUseSL and barstate.isrealtime ? f_extLevelNear(bullBot, true) : na
+    if not na(extLq)
+        rawSL := math.min(rawSL, extLq - atr * slBuffer)
+    tSL := math.min(rawSL, tEntry - atr * minSLatr)
+    tRisk := tEntry - tSL
+    tTP := tEntry + tRisk * rr
+    tTP2 := tEntry + tRisk * tp2R
+    tTP3 := tEntry + tRisk * tp3R
+    sSig += 1
+    sCostR += tRisk > 0 ? tEntry * (feePct + slipPct) / 100 * 2 / tRisk : 0.0
+if bearSig
+    tDir := -1
+    tBar := bar_index
+    tStage := 1
+    tEntry := close
+    tBE := false
+    rawSL = bearTop + atr * slBuffer
+    extLq = extUseSL and barstate.isrealtime ? f_extLevelNear(bearTop, false) : na
+    if not na(extLq)
+        rawSL := math.max(rawSL, extLq + atr * slBuffer)
+    tSL := math.max(rawSL, tEntry + atr * minSLatr)
+    tRisk := tSL - tEntry
+    tTP := tEntry - tRisk * rr
+    tTP2 := tEntry - tRisk * tp2R
+    tTP3 := tEntry - tRisk * tp3R
+    sSig += 1
+    sCostR += tRisk > 0 ? tEntry * (feePct + slipPct) / 100 * 2 / tRisk : 0.0
+
+if bullSig or bearSig
+    tOpen := true
+
+if bullSig or bearSig
+    if not na(lbSig)
+        label.delete(lbSig)
+    if bullSig
+        lbSig := label.new(bar_index, low, ctxMark ? (ctxBias == "LONG" ? "LONG ✅" : "LONG ⚠️") : "LONG", style=label.style_label_up, color=color.green, textcolor=color.white, size=mobileMode ? size.tiny : lblSize)
+    else
+        lbSig := label.new(bar_index, high, ctxMark ? (ctxBias == "SHORT" ? "SHORT ✅" : "SHORT ⚠️") : "SHORT", style=label.style_label_down, color=color.red, textcolor=color.white, size=mobileMode ? size.tiny : lblSize)
+
+if sendBridge and (bullSig or bearSig)
+    alert('{"fuente":"OB","lado":"' + (bullSig ? "LONG" : "SHORT") + '","simbolo":"' + syminfo.ticker + '","tf":"' + timeframe.period + '","entrada":' + str.tostring(tEntry, format.mintick) + ',"target":' + str.tostring(tTP, format.mintick) + ',"tp2":' + str.tostring(tTP2, format.mintick) + ',"tp3":' + str.tostring(tTP3, format.mintick) + ',"sl":' + str.tostring(tSL, format.mintick) + ',"rr":' + str.tostring(rr, "#.##") + '}', alert.freq_once_per_bar_close)
+
+if bullSig or bearSig
+    if not na(lbE)
+        label.delete(lbE)
+        label.delete(lbT)
+        label.delete(lbS)
+    lbE := label.new(bar_index, tEntry, "ENTRADA " + f_px(tEntry), style=label.style_label_left, color=color.gray, textcolor=color.white, size=lblSize)
+    lbT := label.new(bar_index, tTP, (useMultiTP ? "TP1 " : "TP ") + f_px(tTP), style=label.style_label_left, color=color.green, textcolor=color.white, size=lblSize)
+    lbS := label.new(bar_index, tSL, "SL " + f_px(tSL), style=label.style_label_left, color=color.red, textcolor=color.white, size=lblSize)
+
+if (bullSig or bearSig) and showTradeLines
+    if not na(lEntry)
+        line.delete(lEntry)
+        line.delete(lTP)
+        line.delete(lSL)
+    lEntry := line.new(bar_index, tEntry, bar_index + 20, tEntry, extend=extend.right, color=color.white, width=1)
+    lTP    := line.new(bar_index, tTP, bar_index + 20, tTP, extend=extend.right, color=color.green, width=1)
+    lSL    := line.new(bar_index, tSL, bar_index + 20, tSL, extend=extend.right, color=color.red, width=1)
+
+if (bullSig or bearSig) and showTradeZones
+    if not na(bRisk)
+        box.delete(bRisk)
+        box.delete(bRew)
+    bRisk := box.new(bar_index, math.max(tEntry, tSL), bar_index + 1, math.min(tEntry, tSL), border_color=color.new(color.red, 60), border_width=1, bgcolor=color.new(color.red, 85))
+    bRew  := box.new(bar_index, math.max(tEntry, tTP), bar_index + 1, math.min(tEntry, tTP), border_color=color.new(color.green, 60), border_width=1, bgcolor=color.new(color.teal, 85))
+
+if tDir != 0 and not na(bRisk)
+    box.set_right(bRisk, bar_index + 1)
+    box.set_right(bRew, bar_index + 1)
+
+if tDir == 1 and bar_index > tBar
+    target = useMultiTP ? (tStage >= 3 ? tTP3 : tStage == 2 ? tTP2 : tTP) : tTP
+    hitT = high >= target
+    hitS = low <= tSL
+    if hitT and hitS
+        if tStage >= 3 and tSL == tTP
+            sTP2 += 1
+        else if tStage >= 2 and tSL == tEntry
+            sTP1 += 1
+        else if tBE
+            sBE += 1
+        else
+            sSL += 1
+        tDir := 0
+    else if hitT
+        if not useMultiTP
+            sTP1 += 1
+            tDir := 0
+        else if tStage == 1
+            tStage := 2
+            tSL := tEntry
+            tBE := true
+            if showTradeLines and not na(lSL)
+                line.set_y1(lSL, tEntry)
+                line.set_y2(lSL, tEntry)
+                line.set_y1(lTP, tTP2)
+                line.set_y2(lTP, tTP2)
+            if not na(lbS)
+                label.set_y(lbS, tEntry)
+                label.set_text(lbS, "SL→BE " + f_px(tEntry))
+            if not na(lbT)
+                label.set_y(lbT, tTP2)
+                label.set_text(lbT, "TP2 " + f_px(tTP2))
+            if not na(bRisk)
+                box.set_top(bRisk, tEntry)
+                box.set_bottom(bRisk, tEntry)
+            if not na(bRew)
+                box.set_top(bRew, tTP2)
+        else if tStage == 2
+            tStage := 3
+            tSL := tTP
+            if showTradeLines and not na(lSL)
+                line.set_y1(lSL, tTP)
+                line.set_y2(lSL, tTP)
+                line.set_y1(lTP, tTP3)
+                line.set_y2(lTP, tTP3)
+            if not na(lbS)
+                label.set_y(lbS, tTP)
+                label.set_text(lbS, "SL→TP1 " + f_px(tTP))
+            if not na(lbT)
+                label.set_y(lbT, tTP3)
+                label.set_text(lbT, "TP3 " + f_px(tTP3))
+            if not na(bRew)
+                box.set_bottom(bRew, tTP3)
+        else
+            sTP3 += 1
+            tDir := 0
+    else if hitS
+        if tStage >= 3 and tSL == tTP
+            sTP2 += 1
+        else if tStage >= 2 and tSL == tEntry
+            sTP1 += 1
+        else if tBE
+            sBE += 1
+        else
+            sSL += 1
+        tDir := 0
+    else if enableBE and not tBE and (high - tEntry) >= (tTP - tEntry) * bePct / 100
+        tSL := tEntry
+        tBE := true
+        if showTradeLines and not na(lSL)
+            line.set_y1(lSL, tEntry)
+            line.set_y2(lSL, tEntry)
+        if not na(lbS)
+            label.set_y(lbS, tEntry)
+            label.set_text(lbS, "SL→BE " + f_px(tEntry))
+        if not na(bRisk)
+            box.set_top(bRisk, tEntry)
+            box.set_bottom(bRisk, tEntry)
+
+if tDir == -1 and bar_index > tBar
+    target = useMultiTP ? (tStage >= 3 ? tTP3 : tStage == 2 ? tTP2 : tTP) : tTP
+    hitT = low <= target
+    hitS = high >= tSL
+    if hitT and hitS
+        if tStage >= 3 and tSL == tTP
+            sTP2 += 1
+        else if tStage >= 2 and tSL == tEntry
+            sTP1 += 1
+        else if tBE
+            sBE += 1
+        else
+            sSL += 1
+        tDir := 0
+    else if hitT
+        if not useMultiTP
+            sTP1 += 1
+            tDir := 0
+        else if tStage == 1
+            tStage := 2
+            tSL := tEntry
+            tBE := true
+            if showTradeLines and not na(lSL)
+                line.set_y1(lSL, tEntry)
+                line.set_y2(lSL, tEntry)
+                line.set_y1(lTP, tTP2)
+                line.set_y2(lTP, tTP2)
+            if not na(lbS)
+                label.set_y(lbS, tEntry)
+                label.set_text(lbS, "SL→BE " + f_px(tEntry))
+            if not na(lbT)
+                label.set_y(lbT, tTP2)
+                label.set_text(lbT, "TP2 " + f_px(tTP2))
+            if not na(bRisk)
+                box.set_top(bRisk, tEntry)
+                box.set_bottom(bRisk, tEntry)
+            if not na(bRew)
+                box.set_top(bRew, tTP2)
+        else if tStage == 2
+            tStage := 3
+            tSL := tTP
+            if showTradeLines and not na(lSL)
+                line.set_y1(lSL, tTP)
+                line.set_y2(lSL, tTP)
+                line.set_y1(lTP, tTP3)
+                line.set_y2(lTP, tTP3)
+            if not na(lbS)
+                label.set_y(lbS, tTP)
+                label.set_text(lbS, "SL→TP1 " + f_px(tTP))
+            if not na(lbT)
+                label.set_y(lbT, tTP3)
+                label.set_text(lbT, "TP3 " + f_px(tTP3))
+            if not na(bRew)
+                box.set_top(bRew, tTP3)
+        else
+            sTP3 += 1
+            tDir := 0
+    else if hitS
+        if tStage >= 3 and tSL == tTP
+            sTP2 += 1
+        else if tStage >= 2 and tSL == tEntry
+            sTP1 += 1
+        else if tBE
+            sBE += 1
+        else
+            sSL += 1
+        tDir := 0
+    else if enableBE and not tBE and (tEntry - low) >= (tEntry - tTP) * bePct / 100
+        tSL := tEntry
+        tBE := true
+        if showTradeLines and not na(lSL)
+            line.set_y1(lSL, tEntry)
+            line.set_y2(lSL, tEntry)
+        if not na(lbS)
+            label.set_y(lbS, tEntry)
+            label.set_text(lbS, "SL→BE " + f_px(tEntry))
+        if not na(bRisk)
+            box.set_top(bRisk, tEntry)
+            box.set_bottom(bRisk, tEntry)
+
+if tDir == 0 and tOpen
+    if not na(lEntry)
+        line.delete(lEntry)
+        line.delete(lTP)
+        line.delete(lSL)
+        lEntry := na
+        lTP := na
+        lSL := na
+    if not na(lbE)
+        label.delete(lbE)
+        label.delete(lbT)
+        label.delete(lbS)
+        lbE := na
+        lbT := na
+        lbS := na
+    if not na(lbSig)
+        label.delete(lbSig)
+        lbSig := na
+    if not na(bRisk)
+        box.delete(bRisk)
+        box.delete(bRew)
+        bRisk := na
+        bRew := na
+    tOpen := false
+
+if barstate.islast and tDir != 0
+    if not na(lbE)
+        label.set_x(lbE, bar_index)
+    if not na(lbT)
+        label.set_x(lbT, bar_index)
+    if not na(lbS)
+        label.set_x(lbS, bar_index)
+
+posEnum(p) =>
+    p == "Arriba Derecha" ? position.top_right : p == "Abajo Derecha" ? position.bottom_right : p == "Arriba Izquierda" ? position.top_left : position.bottom_left
+
+txtSz = mobileMode ? size.tiny : (tblSize == "Pequeño" ? size.tiny : tblSize == "Grande" ? size.normal : size.small)
+posEntry = mobileMode ? position.top_right : posEnum(tblPos)
+posStats = mobileMode ? position.bottom_right : posEnum(stPos)
+
+tpAct = tStage == 2 ? tTP2 : tStage == 3 ? tTP3 : tTP
+
+if showEntryPanel and barstate.islast
+    var table et = na
+    if na(et)
+        et := table.new(posEntry, 2, 15, bgcolor=color.new(color.black, 75), border_width=1, border_color=color.new(color.gray, 60))
+    estado = tDir == 1 ? "LONG ACTIVO" : tDir == -1 ? "SHORT ACTIVO" : "ESPERANDO SEÑAL"
+    estCol = tDir == 1 ? color.green : tDir == -1 ? color.red : color.gray
+    zonaTxt = (setupBullA ? "🐋 BALLENA + ZONA LONG = A+" : setupBearA ? "🐋 BALLENA + ZONA SHORT = A+" : bullIn ? "🎯 EN OB ALCISTA" : bearIn ? "🎯 EN OB BAJISTA" : bullFIn ? "🎯 EN FVG ALCISTA" : bearFIn ? "🎯 EN FVG BAJISTA" : bullNear ? "⚠ OB ALCISTA CERCA" : bearNear ? "⚠ OB BAJISTA CERCA" : bullFNear ? "⚠ FVG ALCISTA CERCA" : bearFNear ? "⚠ FVG BAJISTA CERCA" : "—") + (showZoneStrength and (bullIn or bearIn or bullNear or bearNear) and curZoneStrength != "" ? " | " + curZoneStrength + " (RVOL " + str.tostring(curZoneRVOL, "#.##") + "x)" : "")
+    zonaCol = setupBullA ? whaleBuyColor : setupBearA ? whaleSellColor : bullIn ? color.green : bearIn ? color.red : bullFIn ? color.teal : bearFIn ? color.maroon : bullNear or bearNear or bullFNear or bearFNear ? color.orange : color.gray
+    ctxTxt = bullConf ? "🟢 LONG CONFIRMADO" : bearConf ? "🔴 SHORT CONFIRMADO" : diP > diM ? "🟠 LONG SIN CONF. DELTA" : diM > diP ? "🟠 SHORT SIN CONF. DELTA" : "⚪ NEUTRO"
+    ctxCol = bullConf ? color.green : bearConf ? color.red : diP > diM or diM > diP ? color.orange : color.gray
+    diTxt = str.tostring(diP, "#.##") + " / " + str.tostring(diM, "#.##") + (diM > diP ? " · vendedores" : diP > diM ? " · compradores" : " · equilibrio")
+    diCol = diM > diP ? color.red : diP > diM ? color.green : color.gray
+    deltaTxtP = (deltaPct >= 0 ? "+" : "") + str.tostring(deltaPct, "#.#") + "% vs 0"
+    deltaColP = deltaPct >= 0 ? color.green : color.red
+
+    nhEq = f_hasLevel(liqHigh, nearHigh)
+    nh24 = showLiq24 and not h24Swept and not na(h24p) and h24p == nearHigh
+    nhSrc = nhEq and nh24 ? "EQH+24h" : nhEq ? "EQH" : nh24 ? "24h" : ""
+    nlEq = f_hasLevel(liqLow, nearLow)
+    nl24 = showLiq24 and not l24Swept and not na(l24p) and l24p == nearLow
+    nlSrc = nlEq and nl24 ? "EQL+24h" : nlEq ? "EQL" : nl24 ? "24h" : ""
+    liqHighTxt = na(nearHigh) ? "—" : f_px(nearHigh) + " · " + nhSrc + " · SHORT"
+    liqHighCol = na(nearHigh) ? color.gray : color.red
+    liqLowTxt = na(nearLow) ? "—" : f_px(nearLow) + " · " + nlSrc + " · LONG"
+    liqLowCol = na(nearLow) ? color.gray : color.green
+    h24Part = not showLiq24 or na(h24p) ? "Máx —" : h24Swept ? "Máx ✅ absorbida" : "Máx ⏳" + (h24p == nearHigh ? "" : " " + f_px(h24p))
+    l24Part = not showLiq24 or na(l24p) ? "Mín —" : l24Swept ? "Mín ✅ absorbida" : "Mín ⏳" + (l24p == nearLow ? "" : " " + f_px(l24p))
+    liq24Txt = h24Part + " · " + l24Part
+    h24On = showLiq24 and not na(h24p)
+    l24On = showLiq24 and not na(l24p)
+    liq24Col = not h24On and not l24On ? color.gray : (not h24On or h24Swept) and (not l24On or l24Swept) ? color.green : color.orange
+    extUpTxt = not showExt or extPx.size() == 0 or extUpIdx < 0 ? "—" : f_px(extPx.get(extUpIdx)) + " · " + f_extName(extUpIdx) + " · " + str.tostring((extPx.get(extUpIdx) - close) / atr, "#.#") + " ATR"
+    extDnTxt = not showExt or extPx.size() == 0 or extDnIdx < 0 ? "—" : f_px(extPx.get(extDnIdx)) + " · " + f_extName(extDnIdx) + " · " + str.tostring((close - extPx.get(extDnIdx)) / atr, "#.#") + " ATR"
+    extAllTxt = not showExt or extPx.size() == 0 ? "—" : "↑ " + extUpTxt + "\n↓ " + extDnTxt
+    extAllCol = extUpIdx < 0 and extDnIdx < 0 ? color.gray : color.white
+
+    pctTP = tDir == 1 ? (tpAct - close) / close * 100 : tDir == -1 ? (close - tpAct) / close * 100 : 0.0
+    table.cell(et, 0, 0, "ESTADO", text_color=color.white, text_size=txtSz)
+    table.cell(et, 1, 0, estado + (useMultiTP and tDir != 0 ? " → TP" + str.tostring(tStage) + " (falta " + str.tostring(math.abs(pctTP), "#.##") + "%)" : ""), text_color=estCol, text_size=txtSz)
+    table.cell(et, 0, 1, "Ratio", text_color=color.gray, text_size=txtSz)
+    table.cell(et, 1, 1, str.tostring(rr, "#.#") + ":1" + (rrInput == "Automático" ? " (auto)" : ""), text_color=color.yellow, text_size=txtSz)
+    table.cell(et, 0, 2, "ADX", text_color=color.gray, text_size=txtSz)
+    table.cell(et, 1, 2, str.tostring(adx, "#") + (adxIsWeak ? " (Débil)" : adxIsStrong ? " (Fuerte)" : " (Media)"), text_color=adxIsWeak ? color.gray : adxIsStrong ? color.green : color.orange, text_size=txtSz)
+    table.cell(et, 0, 3, "Zona", text_color=color.gray, text_size=txtSz)
+    table.cell(et, 1, 3, zonaTxt, text_color=zonaCol, text_size=txtSz)
+    table.cell(et, 0, 4, "CTX ADX", text_color=color.gray, text_size=txtSz)
+    table.cell(et, 1, 4, ctxTxt, text_color=ctxCol, text_size=txtSz)
+    table.cell(et, 0, 5, "DI+ / DI−", text_color=color.gray, text_size=txtSz)
+    table.cell(et, 1, 5, diTxt, text_color=diCol, text_size=txtSz)
+    table.cell(et, 0, 6, "DELTA", text_color=color.gray, text_size=txtSz)
+    table.cell(et, 1, 6, deltaTxtP, text_color=deltaColP, text_size=txtSz)
+    table.cell(et, 0, 7, "💧 Liq ↑", text_color=color.gray, text_size=txtSz)
+    table.cell(et, 1, 7, liqHighTxt, text_color=liqHighCol, text_size=txtSz)
+    table.cell(et, 0, 8, "💧 Liq ↓", text_color=color.gray, text_size=txtSz)
+    table.cell(et, 1, 8, liqLowTxt, text_color=liqLowCol, text_size=txtSz)
+    table.cell(et, 0, 9, "🕐 Liq 24h", text_color=color.gray, text_size=txtSz)
+    table.cell(et, 1, 9, liq24Txt, text_color=liq24Col, text_size=txtSz)
+    table.cell(et, 0, 10, "🌊 Liq externa", text_color=color.gray, text_size=txtSz)
+    table.cell(et, 1, 10, extAllTxt, text_color=extAllCol, text_size=txtSz)
+    domTxtP = curZoneStrength == "" ? "Sin OB cerca" : curZoneDom + " · integridad " + str.tostring(curZoneInteg, "#") + "%"
+    domColP = curZoneDom == "COMPRADORES" ? color.green : curZoneDom == "VENDEDORES" ? color.red : color.gray
+    table.cell(et, 0, 11, "Dominancia OB", text_color=color.gray, text_size=txtSz)
+    table.cell(et, 1, 11, domTxtP, text_color=domColP, text_size=txtSz)
+    sessNow = (inAsia ? "Asia " : "") + (inLDN ? "Londres " : "") + (inNYs ? "NY" : "")
+    sessTxtP = not useSessFilter ? "Filtro OFF" + (sessNow != "" ? " · " + sessNow : "") : (sessOK ? "✅ " : "⛔ FUERA · ") + (sessNow != "" ? sessNow : "sin sesión")
+    sessColP = not useSessFilter ? color.gray : sessOK ? color.green : color.orange
+    table.cell(et, 0, 12, "Sesión", text_color=color.gray, text_size=txtSz)
+    table.cell(et, 1, 12, sessTxtP, text_color=sessColP, text_size=txtSz)
+    riskUsd = acctSize * riskPct / 100
+    qtyP = tDir != 0 and tRisk > 0 ? riskUsd / tRisk : na
+    posTxtP = not showPosSize ? "—" : na(qtyP) ? "Riesgo " + str.tostring(riskUsd, "#.##") + " · espera señal" : str.tostring(qtyP, "#.####") + " " + syminfo.basecurrency + " ≈ " + str.tostring(qtyP * tEntry, "#.##") + " " + syminfo.currency + " · riesgo " + str.tostring(riskUsd, "#.##")
+    table.cell(et, 0, 13, "Tamaño posición", text_color=color.gray, text_size=txtSz)
+    table.cell(et, 1, 13, posTxtP, text_color=color.yellow, text_size=txtSz)
+    linkTxtP = not useOscLink ? "OFF (actívalo en ajustes)" : not linkValid ? "⚠ Selecciona las series del oscilador" : "LONG " + str.tostring(srcOscScoreL, "#") + (linkLongOK ? " ✅" : " ⛔") + " · SHORT " + str.tostring(srcOscScoreS, "#") + (linkShortOK ? " ✅" : " ⛔")
+    linkColP = not useOscLink ? color.gray : not linkValid ? color.orange : color.white
+    table.cell(et, 0, 14, "🔗 Oscilador", text_color=color.gray, text_size=txtSz)
+    table.cell(et, 1, 14, linkTxtP, text_color=linkColP, text_size=txtSz)
+
+if showStats and barstate.islast
+    var table st = na
+    if na(st)
+        st := table.new(posStats, 1, 5, bgcolor=color.new(color.black, 75), border_width=1, border_color=color.new(color.gray, 60))
+    tps = sTP1 + sTP2 + sTP3
+    wr = (tps + sSL) > 0 ? tps / (tps + sSL) * 100 : 0.0
+    netos = sTP1 * rr + sTP2 * tp2R + sTP3 * tp3R - sSL
+    table.cell(st, 0, 0, "Señales: " + str.tostring(sSig), text_color=color.white, text_size=txtSz)
+    table.cell(st, 0, 1, "TP1 " + str.tostring(sTP1) + " · TP2 " + str.tostring(sTP2) + " · TP3 " + str.tostring(sTP3), text_color=color.green, text_size=txtSz)
+    table.cell(st, 0, 2, "SL " + str.tostring(sSL) + " · BE " + str.tostring(sBE), text_color=color.red, text_size=txtSz)
+    table.cell(st, 0, 3, "Winrate: " + str.tostring(wr, "#.#") + "%", text_color=wr >= 50 ? color.green : color.red, text_size=txtSz)
+    netosC = netos - sCostR
+    table.cell(st, 0, 4, "Netos: " + str.tostring(netosC, "#.#") + " R (costos −" + str.tostring(sCostR, "#.#") + " R)", text_color=netosC >= 0 ? color.green : color.red, text_size=txtSz)
+
+alertcondition(bullSig, "LONG confirmado", "🟢 LONG · {{ticker}} · {{interval}}")
+alertcondition(bearSig, "SHORT confirmado", "🔴 SHORT · {{ticker}} · {{interval}}")
+alertcondition(bullSig and ctxBias == "LONG", "LONG confirmado por ADX", "🟢✅ LONG confirmado por CONTEXTO ADX · {{ticker}} · {{interval}}")
+alertcondition(bearSig and ctxBias == "SHORT", "SHORT confirmado por ADX", "🔴✅ SHORT confirmado por CONTEXTO ADX · {{ticker}} · {{interval}}")
+alertcondition(sweepBullNow, "Barrido alcista de liquidez", "💧 Barrido de liquidez BAJISTA cazado (reversión alcista posible) · {{ticker}} · {{interval}}")
+alertcondition(sweepBearNow, "Barrido bajista de liquidez", "💧 Barrido de liquidez ALCISTA cazado (reversión bajista posible) · {{ticker}} · {{interval}}")
+alertcondition(pbNow, "Pullback a zona", "🔄 PULLBACK a zona (OB/FVG) · {{ticker}} · {{interval}}")
+alertcondition(setupBullA, "Setup A+ LONG", "🐋 BALLENA + ZONA LONG = SETUP A+ · {{ticker}} · {{interval}}")
+alertcondition(setupBearA, "Setup A+ SHORT", "🐋 BALLENA + ZONA SHORT = SETUP A+ · {{ticker}} · {{interval}}")
+alertcondition(bullNear or bullIn or bullFNear or bullFIn, "Zona LONG cerca", "⚠ Precio acercándose a zona LONG (OB/FVG) · {{ticker}} · {{interval}}")
+alertcondition(bearNear or bearIn or bearFNear or bearFIn, "Zona SHORT cerca", "⚠ Precio acercándose a zona SHORT (OB/FVG) · {{ticker}} · {{interval}}")
+alertcondition(tStage == 2 and tStage[1] == 1, "TP1 tocado", "✅ TP1 tocado · SL en BE · {{ticker}}")
+alertcondition(tStage == 3 and tStage[1] == 2, "TP2 tocado", "✅ TP2 tocado · SL en TP1 · {{ticker}}")
+alertcondition(sTP3 != sTP3[1], "TP3 completado", "🏆 TP3 completado · {{ticker}}")
+alertcondition(bosUp, "BOS Alcista", "⬆️ BOS alcista · {{ticker}}")
+alertcondition(bosDn, "BOS Bajista", "⬇️ BOS bajista · {{ticker}}")
+alertcondition(extTouch, "Precio toca liquidez externa", "🌊 El precio tocó un nivel de liquidez externa · {{ticker}} · {{interval}}")
