@@ -46,6 +46,8 @@ grpVP = "📊 Perfil de volumen (zona con más negociación)"
 showVP      = input.bool(true, "Mostrar perfil de volumen del último rango (POC y zona de valor)", group=grpVP, tooltip="Como el 'Perfil de volumen de rango fijo' de TradingView: reparte el volumen por precio según el fractal: si la tendencia es alcista, desde el mínimo fuerte (inicio del descuento) hasta el precio actual; si es bajista, desde el máximo fuerte (inicio del premium). POC = precio donde más se negoció (el más importante). Precio SOBRE el POC = sesgo alcista; BAJO el POC = bajista. Es una aproximación con las velas del gráfico.")
 vpRows      = input.int(24, "Filas del perfil", minval=8, maxval=60, group=grpVP)
 vpMaxBars   = input.int(300, "Máx. velas hacia atrás", minval=30, maxval=480, group=grpVP)
+vpRight     = input.bool(true, "Perfil pegado a las últimas velas (como el VPVR de TradingView)", group=grpVP, tooltip="ON: las barras salen desde el borde derecho de las velas hacia la izquierda, siempre visibles. OFF: salen desde el inicio del rango (pueden quedar fuera de pantalla si el rango es largo).")
+vpWidthBars = input.int(20, "Ancho máximo de las barras pegadas a la derecha (velas)", minval=5, maxval=80, group=grpVP)
 vpWidthPct  = input.int(25, "Ancho máximo de las barras (% del rango en velas)", minval=5, maxval=60, group=grpVP)
 vpVA        = input.int(70, "Zona de valor (% del volumen)", minval=50, maxval=95, group=grpVP)
 vpDelta     = input.bool(true, "Colorear por quién dominó (verde compradores / rojo vendedores)", group=grpVP, tooltip="Aproxima el delta de cada fila con la posición del cierre dentro de cada vela.")
@@ -53,7 +55,7 @@ structKeep  = input.int(8, "Cuántas rupturas de estructura dejar dibujadas (BOS
 showHHLL    = input.bool(true, "Marcar HH / HL / LH / LL en los pivotes", group=grpTidy, tooltip="HH = máximo más alto, HL = mínimo más alto (tendencia alcista); LH = máximo más bajo, LL = mínimo más bajo (tendencia bajista).")
 showPDZ     = input.bool(true, "Zonas Premium (caro) y Discount (barato) del último rango", group=grpTidy, tooltip="Franja roja arriba del rango (zona cara para comprar, buena para vender) y verde abajo (zona barata para comprar).")
 pdZonePct   = input.int(8, "Alto de las zonas Premium/Discount (% del rango)", minval=3, maxval=30, group=grpTidy)
-whyKeep     = input.int(3, "Cuántos avisos ⛔ dejar en el gráfico", minval=0, maxval=20, group=grpTidy, tooltip="Solo se conservan los últimos avisos de 'tocó zona pero no dio señal' para no llenar el gráfico.")
+whyKeep     = input.int(2, "Cuántos avisos ⛔ dejar en el gráfico", minval=0, maxval=20, group=grpTidy, tooltip="Solo se conservan los últimos avisos de 'tocó zona pero no dio señal' para no llenar el gráfico.")
 showInstTag  = input.bool(true, "Marcar OB institucionales con 🐋", group=grpDetect, tooltip="Institucional = la vela origen de la zona tuvo volumen inusual (ballena). Se marca con etiqueta 🐋 y color más vívido.")
 instBorder   = input.bool(true, "Resaltar OB institucionales con color más vívido", group=grpDetect)
 showBreakers = input.bool(true, "Mostrar Breakers", group=grpDetect)
@@ -1628,23 +1630,23 @@ bearSig = tDir == 0 and bearTouch and (not useCombined or linkActive or oscOB) a
 f_whyTxt(bool op, bool osc, bool exh, bool adx, bool htf, bool ctx, bool swp, bool ses, bool lnk) =>
     array<string> r = array.new<string>()
     if op
-        r.push("ya hay operación abierta")
+        r.push("op. abierta")
     if osc
-        r.push("el oscilador no confirma")
+        r.push("oscilador")
     if exh
         r.push("sin agotamiento")
     if adx
-        r.push("tendencia débil (ADX)")
+        r.push("ADX débil")
     if htf
-        r.push("timeframe mayor en contra")
+        r.push("TF mayor")
     if ctx
-        r.push("contexto en contra")
+        r.push("contexto")
     if swp
-        r.push("falta barrido de liquidez")
+        r.push("sin barrido")
     if ses
-        r.push("fuera de sesión")
+        r.push("sesión")
     if lnk
-        r.push("puntaje del oscilador bajo")
+        r.push("puntaje osc.")
     int nr = r.size()
     string out = ""
     for i = 0 to math.min(nr, 3) - 1
@@ -1662,9 +1664,9 @@ if showWhy and bearTouch and not bearSig
     whyBear := f_whyTxt(tDir != 0, useCombined and not linkActive and not oscOB, not exhBearOK, not adxOK, not htfBearOK, not ctxShortOK, not sweepOKBear, not sessOK, not linkShortOK)
 var array<label> whyLbls = array.new<label>()
 if whyBull != "" and szWhy != "Oculto"
-    whyLbls.push(label.new(bar_index, low - atr * 0.5, "LONG ✖ falta: " + whyBull, style=label.style_label_up, color=color.new(color.orange, 10), textcolor=color.black, size=f_sz(szWhy), tooltip="Tocó una zona de compra pero NO es señal todavía. Falta cumplir: " + whyBull))
+    whyLbls.push(label.new(bar_index, low - atr * 0.5, "LONG ✖ falta:\n" + whyBull, style=label.style_label_up, color=color.new(color.orange, 10), textcolor=color.black, size=f_sz(szWhy), tooltip="Tocó una zona de compra pero NO es señal todavía. Falta cumplir: " + whyBull + " (oscilador = no confirma · ADX débil = tendencia sin fuerza · TF mayor = timeframe mayor en contra · contexto = contexto en contra · sin barrido = falta barrido de liquidez · puntaje osc. = puntaje del oscilador bajo)"))
 if whyBear != "" and szWhy != "Oculto"
-    whyLbls.push(label.new(bar_index, high + atr * 0.5, "SHORT ✖ falta: " + whyBear, style=label.style_label_down, color=color.new(color.orange, 10), textcolor=color.black, size=f_sz(szWhy), tooltip="Tocó una zona de venta pero NO es señal todavía. Falta cumplir: " + whyBear))
+    whyLbls.push(label.new(bar_index, high + atr * 0.5, "SHORT ✖ falta:\n" + whyBear, style=label.style_label_down, color=color.new(color.orange, 10), textcolor=color.black, size=f_sz(szWhy), tooltip="Tocó una zona de venta pero NO es señal todavía. Falta cumplir: " + whyBear + " (oscilador = no confirma · ADX débil = tendencia sin fuerza · TF mayor = timeframe mayor en contra · contexto = contexto en contra · sin barrido = falta barrido de liquidez · puntaje osc. = puntaje del oscilador bajo)"))
 while whyLbls.size() > whyKeep
     label.delete(whyLbls.shift())
 
@@ -2046,8 +2048,9 @@ if barstate.islast and showVP and not na(rgStart)
             bool inVA = r >= vaLo and r <= vaHi
             float bShare = vrow > 0 ? rbuy.get(r) / vrow : 0.5
             color cRow = r == pocR ? color.new(color.yellow, 35) : vpDelta ? (bShare >= 0.5 ? color.new(color.teal, inVA ? 50 : 78) : color.new(color.red, inVA ? 50 : 78)) : color.new(color.gray, inVA ? 50 : 78)
-            int rowW = math.max(1, math.round(vMax > 0 ? vrow / vMax * wBars : 0))
-            vpBoxes.push(box.new(vpStart, vpLo + (r + 1) * vpStep, vpStart + rowW, vpLo + r * vpStep, border_width=0, bgcolor=cRow))
+            int rowW = math.max(1, math.round(vMax > 0 ? vrow / vMax * (vpRight ? vpWidthBars : wBars) : 0))
+            int rowL = vpRight ? bar_index + 1 - rowW : vpStart
+            vpBoxes.push(box.new(rowL, vpLo + (r + 1) * vpStep, rowL + rowW, vpLo + r * vpStep, border_width=0, bgcolor=cRow))
         vpPoc := vpLo + (pocR + 0.5) * vpStep
         vpVah := vpLo + (vaHi + 1) * vpStep
         vpVal := vpLo + vaLo * vpStep
