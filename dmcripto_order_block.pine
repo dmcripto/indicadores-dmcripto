@@ -45,6 +45,16 @@ showEqBox   = input.bool(true, "Caja Equilibrio (50% del rango, entre barato y c
 tidyAuto    = input.bool(true, "Separación automática de etiquetas según el zoom del gráfico", group=grpTidy, tooltip="ON (recomendado): calcula cuánto espacio necesita cada etiqueta según lo que ves en pantalla (alto del precio visible), así no se pisan aunque cambies el zoom. OFF: usa el valor fijo de abajo (x ATR).")
 lblPct      = input.float(4.6, "Alto de una etiqueta (% del precio visible) para la separación automática", minval=1.0, maxval=10.0, step=0.2, group=grpTidy, tooltip="Si siguen pisándose, súbelo (5.5, 6.5). Si quedan muy separadas, bájalo (3.5).")
 rowGapATR   = input.float(0.4, "Alto de cada línea de texto (x ATR) para separar etiquetas", minval=0.1, maxval=1.0, step=0.05, group=grpTidy, tooltip="Si ves etiquetas pegadas o encimadas, súbelo (0.4, 0.5). Si quedan muy separadas, bájalo.")
+grpFib = "📐 Fibonacci (zona de descuento)"
+showFib    = input.bool(true, "Mostrar Fibonacci del último impulso (zona de descuento y golden pocket)", group=grpFib, tooltip="Usa el mismo tramo automático que Premium/Discount: si la tendencia es alcista, mide el retroceso desde el máximo hacia el mínimo del impulso. Zona de descuento = el precio devolvió el 50% o más de lo subido: ahí se busca comprar. Si es bajista se dibuja el espejo (zona de venta).")
+fibLog     = input.bool(true, "Escala logarítmica (recomendado en cripto)", group=grpFib, tooltip="Calcula los niveles en escala logarítmica, como en el video: si no, los niveles salen mal en movimientos grandes. Si tu gráfico está en escala normal y el rango es chico, puedes apagarlo.")
+fibGpA     = input.float(0.618, "Golden pocket: inicio", minval=0.5, maxval=0.9, step=0.001, group=grpFib)
+fibGpB     = input.float(0.65, "Golden pocket: fin", minval=0.5, maxval=0.9, step=0.001, group=grpFib)
+fibShow382 = input.bool(false, "Mostrar también el nivel 0.382", group=grpFib)
+fibShow786 = input.bool(true, "Mostrar también el nivel 0.786", group=grpFib)
+fibPlan    = input.bool(true, "Mostrar el plan: 2 compras, break even y salida parcial", group=grpFib, tooltip="Plan del video, solo informativo (no abre operaciones): 1ª compra en el 50%, 2ª en el golden pocket, break even cuando el precio promedio sube el % indicado, y venta parcial al tomar el máximo anterior.")
+fibBEpct   = input.int(20, "Break even: cuando el precio suba (%) desde el promedio de entrada", minval=1, maxval=200, group=grpFib, tooltip="En el video: a +20% se protege la entrada poniendo el stop justo por encima del precio promedio. En timeframes cortos usa un valor menor (por ejemplo 3 o 5).")
+fibTpPart  = input.int(50, "Salida parcial en el máximo anterior (% de la posición)", minval=10, maxval=100, group=grpFib)
 grpVP = "📊 Perfil de volumen (zona con más negociación)"
 showVP      = input.bool(true, "Mostrar perfil de volumen del último rango (POC y zona de valor)", group=grpVP, tooltip="Como el 'Perfil de volumen de rango fijo' de TradingView: reparte el volumen por precio según el fractal: si la tendencia es alcista, desde el mínimo fuerte (inicio del descuento) hasta el precio actual; si es bajista, desde el máximo fuerte (inicio del premium). POC = precio donde más se negoció (el más importante). Precio SOBRE el POC = sesgo alcista; BAJO el POC = bajista. Es una aproximación con las velas del gráfico.")
 vpRows      = input.int(24, "Filas del perfil", minval=8, maxval=60, group=grpVP)
@@ -185,6 +195,7 @@ szStruct = input.string("Pequeño", "Estructura BOS / CHoCH", options=["Oculto",
 szWhy    = input.string("Pequeño", "Avisos «tocó zona pero no es señal» (✖ falta: ...)", options=["Oculto", "Muy pequeño", "Pequeño", "Normal", "Grande"], group=grpSz, tooltip="Naranja con texto negro para que se lea bien. Dice en palabras simples qué filtro falta. Pasa el mouse para ver el detalle.")
 szHL     = input.string("Pequeño", "HH / HL / LH / LL en los pivotes", options=["Oculto", "Muy pequeño", "Pequeño", "Normal", "Grande"], group=grpSz)
 szIStruct = input.string("Pequeño", "Estructura interna iBOS / iCHoCH", options=["Oculto", "Muy pequeño", "Pequeño", "Normal", "Grande"], group=grpSz)
+szFib    = input.string("Pequeño", "Fibonacci (niveles y plan)", options=["Oculto", "Muy pequeño", "Pequeño", "Normal", "Grande"], group=grpSz)
 szPos    = input.string("Muy pequeño", "POSIBLE LONG / SHORT", options=["Oculto", "Muy pequeño", "Pequeño", "Normal", "Grande"], group=grpSz)
 lblShort = input.bool(true, "Texto corto en liquidaciones (sin '~' ni 'est.')", group=grpSz)
 lblIcons = input.bool(true, "Etiquetas con iconos y palabras simples (en vez de siglas PDH / PWH / LIQ / POC)", group=grpSz, tooltip="ON: 📅 Máx. de ayer, 📆 Mín. semana, ⬆💥 Cortos 25x (liquidación de cortos), 🎯 POC... y al pasar el mouse sobre la etiqueta se explica qué significa. OFF: siglas técnicas.")
@@ -2066,6 +2077,81 @@ if barstate.islast and showPDZ and not na(rgHi) and rgHi > rgLo
     pzBox := box.new(rgView, rgHi, pdR, rgHi - pdZ, border_color=color.new(color.red, 55), bgcolor=color.new(color.red, 88), text="Premium (caro)", text_color=color.new(color.white, 5), text_size=size.small, text_halign=text.align_center, text_valign=text.align_bottom)
     dzBox := box.new(rgView, rgLo + pdZ, pdR, rgLo, border_color=color.new(color.green, 55), bgcolor=color.new(color.green, 88), text="Discount (barato)", text_color=color.new(color.white, 5), text_size=size.small, text_halign=text.align_center, text_valign=text.align_top)
 
+// ------------------- FIBONACCI (zona de descuento) -------------------
+// Niveles del retroceso del último impulso. Alcista: del máximo hacia el mínimo. Bajista: del mínimo hacia el máximo (espejo).
+f_fibPx(float r) =>
+    float px = na
+    if rgUp
+        px := fibLog and rgLo > 0 ? math.exp(math.log(rgHi) - r * (math.log(rgHi) - math.log(rgLo))) : rgHi - r * (rgHi - rgLo)
+    else
+        px := fibLog and rgLo > 0 ? math.exp(math.log(rgLo) + r * (math.log(rgHi) - math.log(rgLo))) : rgLo + r * (rgHi - rgLo)
+    px
+
+var array<line>  fibLines = array.new<line>()
+var array<box>   fibBoxes = array.new<box>()
+var array<label> fibLbls  = array.new<label>()
+var array<float> fibHf    = array.new<float>()
+var string fibTxt = "OFF"
+var color  fibCol = color.gray
+var bool   fibInZone = false
+if barstate.islast
+    while fibLines.size() > 0
+        line.delete(fibLines.pop())
+    while fibBoxes.size() > 0
+        box.delete(fibBoxes.pop())
+    while fibLbls.size() > 0
+        label.delete(fibLbls.pop())
+    fibHf.clear()
+    fibInZone := false
+    fibTxt := "OFF"
+    fibCol := color.gray
+    if showFib and not na(rgHi) and rgHi > rgLo
+        float p50 = f_fibPx(0.5)
+        float pGa = f_fibPx(fibGpA)
+        float pGb = f_fibPx(fibGpB)
+        float p786 = f_fibPx(0.786)
+        float p382 = f_fibPx(0.382)
+        float pEnd = rgUp ? rgLo : rgHi
+        float avgE = (p50 + pGa) / 2
+        float pBE = rgUp ? avgE * (1 + fibBEpct / 100.0) : avgE * (1 - fibBEpct / 100.0)
+        float pTP = rgUp ? rgHi : rgLo
+        color cZ = rgUp ? color.green : color.red
+        int fx1 = rgView
+        int fx2 = bar_index + pdReach
+        string who = rgUp ? "DESCUENTO" : "PREMIUM"
+        string buy = rgUp ? "compra" : "venta"
+        fibBoxes.push(box.new(fx1, math.max(p50, pEnd), fx2, math.min(p50, pEnd), border_width=0, bgcolor=color.new(cZ, 93)))
+        fibBoxes.push(box.new(fx1, math.max(pGa, pGb), fx2, math.min(pGa, pGb), border_width=0, bgcolor=color.new(color.yellow, 82)))
+        fibLines.push(line.new(fx1, p50, bar_index + colLevels, p50, color=color.new(cZ, 20), style=line.style_solid, width=1))
+        fibLines.push(line.new(fx1, pGa, bar_index + colLevels, pGa, color=color.new(color.yellow, 20), style=line.style_dashed, width=1))
+        if fibShow786
+            fibLines.push(line.new(fx1, p786, bar_index + colLevels, p786, color=color.new(color.gray, 40), style=line.style_dotted, width=1))
+        if fibShow382
+            fibLines.push(line.new(fx1, p382, bar_index + colLevels, p382, color=color.new(color.gray, 40), style=line.style_dotted, width=1))
+        if szFib != "Oculto"
+            string tpFx = " · " + (fibLog ? "escala log" : "escala normal")
+            fibLbls.push(label.new(bar_index + colLevels, p50, "📐 50% " + who + " · 1ª " + buy + " " + f_px(p50), style=label.style_label_left, color=color.new(cZ, 25), textcolor=color.white, size=f_sz(szFib), tooltip="Fibonacci 50%: el precio devolvió la mitad del último impulso. Es el punto mínimo para empezar a " + (rgUp ? "comprar" : "vender") + " según la estrategia del video" + tpFx + "."))
+            fibHf.push(f_hf(szFib))
+            fibLbls.push(label.new(bar_index + colLevels, pGa, "📐 Golden Pocket · 2ª " + buy + " " + f_px(pGa), style=label.style_label_left, color=color.new(color.yellow, 20), textcolor=color.black, size=f_sz(szFib), tooltip="Golden pocket (" + str.tostring(fibGpA) + " a " + str.tostring(fibGpB) + "): zona de retroceso profundo donde se busca la segunda " + buy + "."))
+            fibHf.push(f_hf(szFib))
+            if fibShow786
+                fibLbls.push(label.new(bar_index + colLevels, p786, "📐 0.786 " + f_px(p786), style=label.style_label_left, color=color.new(color.gray, 25), textcolor=color.white, size=f_sz(szFib), tooltip="Nivel 0.786: retroceso muy profundo. Si se pierde, el impulso suele estar en riesgo."))
+                fibHf.push(f_hf(szFib))
+            if fibShow382
+                fibLbls.push(label.new(bar_index + colLevels, p382, "📐 0.382 " + f_px(p382), style=label.style_label_left, color=color.new(color.gray, 25), textcolor=color.white, size=f_sz(szFib), tooltip="Nivel 0.382: retroceso leve, todavía no es zona de " + who + "."))
+                fibHf.push(f_hf(szFib))
+            if fibPlan
+                fibLbls.push(label.new(bar_index + colLevels, pBE, "🛡 +" + str.tostring(fibBEpct) + "% → SL a break even " + f_px(pBE), style=label.style_label_left, color=color.new(color.teal, 25), textcolor=color.white, size=f_sz(szFib), tooltip="Plan del video: cuando el precio promedio de entrada se mueve " + str.tostring(fibBEpct) + "% a tu favor, mueve el stop justo por encima del promedio para proteger la entrada. Promedio estimado con 2 compras iguales (50% y golden pocket): " + f_px(avgE) + "."))
+                fibHf.push(f_hf(szFib))
+                fibLbls.push(label.new(bar_index + colLevels, pTP, "🎯 Salir " + str.tostring(fibTpPart) + "% · " + (rgUp ? "máx." : "mín.") + " anterior " + f_px(pTP), style=label.style_label_left, color=color.new(color.green, 25), textcolor=color.white, size=f_sz(szFib), tooltip="Plan del video: al tomar el " + (rgUp ? "máximo" : "mínimo") + " anterior se cierra una parte de la posición y el resto se deja correr."))
+                fibHf.push(f_hf(szFib))
+        bool atZone = rgUp ? close <= p50 : close >= p50
+        bool atGp = (close <= math.max(pGa, pGb)) and (close >= math.min(pGa, pGb))
+        fibInZone := atZone
+        float distP = math.abs(close - p50) / close * 100
+        fibTxt := atZone ? "📐 En zona de " + who + " (50%+)" + (atGp ? " · Golden Pocket" : "") : "📐 Esperando retroceso · faltan " + str.tostring(distP, "#.#") + "% al 50%"
+        fibCol := atGp ? color.yellow : atZone ? cZ : color.gray
+
 var array<box> vpBoxes = array.new<box>()
 var array<line> vpLines = array.new<line>()
 var label vpPocLbl = na
@@ -2138,7 +2224,7 @@ if barstate.islast and showVP and not na(rgStart)
 if showEntryPanel and barstate.islast
     var table et = na
     if na(et)
-        et := table.new(posEntry, 2, panelCompact ? 6 : 17, bgcolor=color.new(color.black, 75), border_width=1, border_color=color.new(color.gray, 60))
+        et := table.new(posEntry, 2, panelCompact ? 7 : 18, bgcolor=color.new(color.black, 75), border_width=1, border_color=color.new(color.gray, 60))
     estado = tDir == 1 ? "LONG ACTIVO" : tDir == -1 ? "SHORT ACTIVO" : "ESPERANDO SEÑAL"
     estCol = tDir == 1 ? color.green : tDir == -1 ? color.red : color.gray
     zonaTxt = (setupBullA ? "🐋 BALLENA + ZONA LONG = A+" : setupBearA ? "🐋 BALLENA + ZONA SHORT = A+" : bullIn ? "🎯 EN OB ALCISTA" : bearIn ? "🎯 EN OB BAJISTA" : bullFIn ? "🎯 EN FVG ALCISTA" : bearFIn ? "🎯 EN FVG BAJISTA" : bullNear ? "⚠ OB ALCISTA CERCA" : bearNear ? "⚠ OB BAJISTA CERCA" : bullFNear ? "⚠ FVG ALCISTA CERCA" : bearFNear ? "⚠ FVG BAJISTA CERCA" : "—") + (showZoneStrength and (bullIn or bearIn or bullNear or bearNear) and curZoneStrength != "" ? " | " + curZoneStrength + " (RVOL " + str.tostring(curZoneRVOL, "#.##") + "x)" : "")
@@ -2190,9 +2276,11 @@ if showEntryPanel and barstate.islast
         asCol := color.orange
     else
         asTxt := "⏳ Sin zonas cerca\nEspera, no operes por operar"
+    if showFib and fibInZone and not (bullSig or bearSig) and tDir == 0
+        asTxt += "\n📐 En zona Fibonacci (50%+)"
 
     int pr = 0
-    table.clear(et, 0, 0, 1, (panelCompact ? 6 : 17) - 1)
+    table.clear(et, 0, 0, 1, (panelCompact ? 7 : 18) - 1)
     pctTP = tDir == 1 ? (tpAct - close) / close * 100 : tDir == -1 ? (close - tpAct) / close * 100 : 0.0
     table.cell(et, 0, pr, "ESTADO", text_color=color.white, text_size=txtSz)
     table.cell(et, 1, pr, estado + (useMultiTP and tDir != 0 ? " → TP" + str.tostring(tStage) + " (falta " + str.tostring(math.abs(pctTP), "#.##") + "%)" : ""), text_color=estCol, text_size=txtSz)
@@ -2269,6 +2357,9 @@ if showEntryPanel and barstate.islast
     table.cell(et, 0, pr, "📊 Perfil volumen", text_color=color.gray, text_size=txtSz)
     table.cell(et, 1, pr, vpTxtP, text_color=vpColP, text_size=txtSz)
     pr += 1
+    table.cell(et, 0, pr, "📐 Fibonacci", text_color=color.gray, text_size=txtSz)
+    table.cell(et, 1, pr, showFib ? fibTxt : "OFF", text_color=showFib ? fibCol : color.gray, text_size=txtSz)
+    pr += 1
 
 if showStats and barstate.islast
     var table st = na
@@ -2344,6 +2435,10 @@ if barstate.islast and tidyRight
     if not na(vpPocLbl)
         colA.push(vpPocLbl)
         colHf.push(f_hf(szPoc))
+    if fibLbls.size() > 0
+        for i = 0 to fibLbls.size() - 1
+            colA.push(fibLbls.get(i))
+            colHf.push(fibHf.size() > i ? fibHf.get(i) : 1.0)
     if not na(h24_lb)
         colA.push(h24_lb)
         colHf.push(f_hf(szLiq))
