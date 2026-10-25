@@ -2066,7 +2066,7 @@ var box eqBox = na
 if barstate.islast and showEqBox and not na(rgHi) and rgHi > rgLo
     if not na(eqBox)
         box.delete(eqBox)
-    float rgEq = (rgHi + rgLo) / 2
+    float rgEq = fibLog and rgLo > 0 ? math.exp((math.log(rgHi) + math.log(rgLo)) / 2) : (rgHi + rgLo) / 2
     float eqBand = math.max((rgHi - rgLo) * 0.03, atr * 0.15)
     eqBox := box.new(rgView, rgEq + eqBand, bar_index + pdReach, rgEq - eqBand, border_color=color.new(color.gray, 55), bgcolor=color.new(color.gray, 82), text="Equilibrio", text_color=color.new(color.white, 25), text_size=size.small, text_halign=text.align_right, text_valign=text.align_center)
 
