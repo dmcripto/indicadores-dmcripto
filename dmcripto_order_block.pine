@@ -1376,7 +1376,7 @@ if fzs.size() > 0
 var array<label> infoLbls = array.new<label>()
 var array<label> cardIcons = array.new<label>()
 var array<float> cardHf = array.new<float>()
-if barstate.islast
+f_tarjetasZonas() =>
     while infoLbls.size() > 0
         label.delete(infoLbls.pop())
     while cardIcons.size() > 0
@@ -1540,6 +1540,9 @@ if barstate.islast
                 txS := txS + "\n――――――――――\n" + sTx.get(i2)
                 tipS := tipS + "\n\nSIGUIENTE ZONA:\n" + sTipOne.get(i2)
         infoLbls.push(label.new(bar_index + infoLblOffset, sMid.get(i1), txS, style=label.style_label_left, color=sCol.get(i1), textcolor=color.white, size=size.small, tooltip=showTips ? tipS : ""))
+
+if barstate.islast
+    f_tarjetasZonas()
 
 inAsia = not na(time(timeframe.period, sessAsia, tz))
 inLDN  = not na(time(timeframe.period, sessLDN, tz))
@@ -2221,7 +2224,7 @@ if barstate.islast and showVP and not na(rgStart)
         if szPoc != "Oculto"
             vpPocLbl := label.new(bar_index + 1, vpPoc, (lblIcons ? "🎯 POC " : "POC ") + f_px(vpPoc), style=label.style_label_left, color=color.new(color.yellow, 15), textcolor=color.black, size=f_sz(szPoc), tooltip="POC: el precio donde más se negoció en el rango. Sobre el POC el mercado está alcista; bajo el POC, bajista. Entre VAL y VAH está la zona de valor (donde se concentró el " + str.tostring(vpVA) + "% del volumen).")
 
-if showEntryPanel and barstate.islast
+f_panelEntrada() =>
     var table et = na
     if na(et)
         et := table.new(posEntry, 2, panelCompact ? 7 : 18, bgcolor=color.new(color.black, 75), border_width=1, border_color=color.new(color.gray, 60))
@@ -2360,6 +2363,9 @@ if showEntryPanel and barstate.islast
     table.cell(et, 0, pr, "📐 Fibonacci", text_color=color.gray, text_size=txtSz)
     table.cell(et, 1, pr, showFib ? fibTxt : "OFF", text_color=showFib ? fibCol : color.gray, text_size=txtSz)
     pr += 1
+
+if showEntryPanel and barstate.islast
+    f_panelEntrada()
 
 if showStats and barstate.islast
     var table st = na
