@@ -15,6 +15,7 @@ QUÉ DIBUJA
 • Liquidez 24h: el máximo y el mínimo de las últimas 24 horas que aún no se tocaron.
 • Franjas Premium (caro), Discount (barato) y Equilibrio del último rango.
 • Perfil de volumen del rango actual con POC y zona de valor: sobre el POC el sesgo es alcista, bajo el POC es bajista.
+• Fibonacci del último impulso (escala logarítmica): zona de descuento desde el 50%, golden pocket (0.618–0.65), y el plan de 2 compras, break even (+% ajustable) y salida parcial en el máximo anterior. Si la tendencia es bajista, dibuja el espejo (zona de venta).
 
 PANEL Y ASISTENTE
 Un panel compacto con Estado, Asistente, Zona, Sesión, Oscilador y Perfil de volumen. La fila 🤖 Asistente resume en palabras simples qué hacer: ✅ señal con entrada, SL y TP, 👀 en zona pero aún sin señal (y qué filtro falta), ⏳ prepárate o espera. Avisa cuando es fin de semana (menos liquidez).

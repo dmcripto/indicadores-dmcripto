@@ -1,0 +1,31 @@
+DMCRIPTO ORDER BLOCK V3.0 — RESUMEN DE ACTUALIZACIÓN
+
+NUEVO
+• 📐 Fibonacci (estrategia del video): retroceso del último impulso en escala logarítmica, zona de descuento desde el 50%, golden pocket, plan de 2 compras, break even y salida parcial. Con espejo para tendencia bajista.
+• 🤖 Asistente en el panel: dice en palabras simples qué hacer (✅ señal con entrada/SL/TP, 👀 en zona sin señal, ⏳ espera).
+• 📊 Perfil de volumen con POC y zona de valor.
+• Franjas Premium (caro), Discount (barato) y Equilibrio.
+• Estructura con líneas: BOS, CHoCH, iBOS/iCHoCH y HH/HL/LH/LL.
+• Aviso en el panel cuando es fin de semana (poca liquidez).
+
+MEJORAS
+• Las zonas OB y FVG se recortan: se borra la parte tocada y queda la parte sin tocar.
+• Los niveles de ayer, semana y mes se borran cuando el precio los toca.
+• Tarjetas ⓘ dentro de cada zona, más cortas, con el análisis completo al pasar el mouse.
+• Etiquetas con iconos y palabras simples (📅 Máx. de ayer, ⬆💥 Cortos 25x, 🎯 POC...), con explicación al pasar el mouse.
+• Etiquetas ordenadas: se separan solas según el zoom y cada tipo tiene su tamaño (o se oculta).
+• Panel compacto de 6 a 7 filas (el completo sigue disponible).
+• Líneas de niveles que terminan en su etiqueta, en vez de cruzar todo el gráfico.
+• Avisos naranja "✖ falta: ..." cuando se toca una zona pero aún no hay señal.
+• Valores por defecto más limpios: máx. 2 OB y 3 FVG.
+
+CORRECCIONES
+• Error de límite de tamaño del script (CE10295) y de rangos de ajustes (CE10077).
+• Etiquetas que se encimaban y tarjetas que pasaban bajo el panel.
+
+CÓMO ACTUALIZAR
+1. Quita el indicador viejo del gráfico.
+2. Pega el código nuevo y vuelve a añadirlo.
+3. Elige otra vez las series del oscilador en sus ajustes (el enlace se borra al re-añadirlo).
+
+Contenido educativo. No es asesoría financiera ni garantía de resultados.
