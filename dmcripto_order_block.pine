@@ -227,6 +227,7 @@ showEntryPanel = input.bool(true, "Mostrar panel de operación", group=grpEntry)
 panelCompact = input.bool(true, "Panel compacto (solo lo esencial: estado, asistente, zona, oscilador, perfil y sesión)", group=grpEntry, tooltip="ON: panel chico que no tapa el gráfico. OFF: panel completo con ratio, ADX, DI, delta, liquidaciones, dominancia y tamaño de posición.")
 showTradeLines = input.bool(false, "Dibujar también líneas Entrada/TP/SL", group=grpEntry)
 showTradeZones = input.bool(true, "Zonas sombreadas de riesgo (rojo) y ganancia (verde)", group=grpEntry)
+tradeInPanel = input.bool(true, "Entrada / SL / TP solo en el panel (no dibujar en el gráfico)", group=grpEntry, tooltip="ON (recomendado): el gráfico queda limpio. Los precios de entrada, stop loss y take profit aparecen en la fila 📋 Operación del panel y en el asistente. OFF: se dibujan etiquetas, líneas y zonas en el gráfico, como antes.")
 rrInput = input.string("Automático", "Riesgo:Beneficio (TP1)", options=["0.5:1", "0.8:1", "1:1", "1.2:1", "1.5:1", "2:1", "3:1", "Automático"], group=grpEntry)
 tfSec  = timeframe.in_seconds()
 rrAuto = tfSec <= 120 ? 1.0 : tfSec <= 300 ? 1.2 : tfSec <= 900 ? 1.5 : tfSec <= 3600 ? 1.8 : tfSec <= 14400 ? 2.0 : tfSec <= 86400 ? 2.5 : tfSec <= 604800 ? 3.0 : 3.5
@@ -1807,11 +1808,12 @@ if bullSig or bearSig
         label.delete(lbE)
         label.delete(lbT)
         label.delete(lbS)
-    lbE := label.new(bar_index, tEntry, "ENTRADA " + f_px(tEntry), style=label.style_label_left, color=color.gray, textcolor=color.white, size=lblSize)
-    lbT := label.new(bar_index, tTP, (useMultiTP ? "TP1 " : "TP ") + f_px(tTP), style=label.style_label_left, color=color.green, textcolor=color.white, size=lblSize)
-    lbS := label.new(bar_index, tSL, "SL " + f_px(tSL), style=label.style_label_left, color=color.red, textcolor=color.white, size=lblSize)
+    if not tradeInPanel
+        lbE := label.new(bar_index, tEntry, "ENTRADA " + f_px(tEntry), style=label.style_label_left, color=color.gray, textcolor=color.white, size=lblSize)
+        lbT := label.new(bar_index, tTP, (useMultiTP ? "TP1 " : "TP ") + f_px(tTP), style=label.style_label_left, color=color.green, textcolor=color.white, size=lblSize)
+        lbS := label.new(bar_index, tSL, "SL " + f_px(tSL), style=label.style_label_left, color=color.red, textcolor=color.white, size=lblSize)
 
-if (bullSig or bearSig) and showTradeLines
+if (bullSig or bearSig) and showTradeLines and not tradeInPanel
     if not na(lEntry)
         line.delete(lEntry)
         line.delete(lTP)
@@ -1820,7 +1822,7 @@ if (bullSig or bearSig) and showTradeLines
     lTP    := line.new(bar_index, tTP, bar_index + 20, tTP, extend=extend.right, color=color.green, width=1)
     lSL    := line.new(bar_index, tSL, bar_index + 20, tSL, extend=extend.right, color=color.red, width=1)
 
-if (bullSig or bearSig) and showTradeZones
+if (bullSig or bearSig) and showTradeZones and not tradeInPanel
     if not na(bRisk)
         box.delete(bRisk)
         box.delete(bRew)
@@ -2229,7 +2231,7 @@ if barstate.islast and showVP and not na(rgStart)
 f_panelEntrada() =>
     var table et = na
     if na(et)
-        et := table.new(posEntry, 2, panelCompact ? 7 : 18, bgcolor=color.new(color.black, 75), border_width=1, border_color=color.new(color.gray, 60))
+        et := table.new(posEntry, 2, panelCompact ? 8 : 19, bgcolor=color.new(color.black, 75), border_width=1, border_color=color.new(color.gray, 60))
     estado = tDir == 1 ? "LONG ACTIVO" : tDir == -1 ? "SHORT ACTIVO" : "ESPERANDO SEÑAL"
     estCol = tDir == 1 ? color.green : tDir == -1 ? color.red : color.gray
     zonaTxt = (setupBullA ? "🐋 BALLENA + ZONA LONG = A+" : setupBearA ? "🐋 BALLENA + ZONA SHORT = A+" : bullIn ? "🎯 EN OB ALCISTA" : bearIn ? "🎯 EN OB BAJISTA" : bullFIn ? "🎯 EN FVG ALCISTA" : bearFIn ? "🎯 EN FVG BAJISTA" : bullNear ? "⚠ OB ALCISTA CERCA" : bearNear ? "⚠ OB BAJISTA CERCA" : bullFNear ? "⚠ FVG ALCISTA CERCA" : bearFNear ? "⚠ FVG BAJISTA CERCA" : "—") + (showZoneStrength and (bullIn or bearIn or bullNear or bearNear) and curZoneStrength != "" ? " | " + curZoneStrength + " (RVOL " + str.tostring(curZoneRVOL, "#.##") + "x)" : "")
@@ -2285,7 +2287,7 @@ f_panelEntrada() =>
         asTxt += "\n📐 En zona Fibonacci (50%+)"
 
     int pr = 0
-    table.clear(et, 0, 0, 1, (panelCompact ? 7 : 18) - 1)
+    table.clear(et, 0, 0, 1, (panelCompact ? 8 : 19) - 1)
     pctTP = tDir == 1 ? (tpAct - close) / close * 100 : tDir == -1 ? (close - tpAct) / close * 100 : 0.0
     table.cell(et, 0, pr, "ESTADO", text_color=color.white, text_size=txtSz)
     table.cell(et, 1, pr, estado + (useMultiTP and tDir != 0 ? " → TP" + str.tostring(tStage) + " (falta " + str.tostring(math.abs(pctTP), "#.##") + "%)" : ""), text_color=estCol, text_size=txtSz)
@@ -2293,6 +2295,11 @@ f_panelEntrada() =>
     if showAssist
         table.cell(et, 0, pr, "🤖 Asistente", text_color=color.gray, text_size=txtSz)
         table.cell(et, 1, pr, asTxt, text_color=asCol, text_size=txtSz)
+        pr += 1
+    if tDir != 0 and tradeInPanel
+        string opTxt = (tDir == 1 ? "LONG" : "SHORT") + " · Entrada " + f_px(tEntry) + "\nSL " + f_px(tSL) + " · TP1 " + f_px(tTP) + (useMultiTP ? "\nTP2 " + f_px(tTP2) + " · TP3 " + f_px(tTP3) : "")
+        table.cell(et, 0, pr, "📋 Operación", text_color=color.gray, text_size=txtSz)
+        table.cell(et, 1, pr, opTxt, text_color=tDir == 1 ? color.green : color.red, text_size=txtSz)
         pr += 1
     if not panelCompact
         table.cell(et, 0, pr, "Ratio", text_color=color.gray, text_size=txtSz)
